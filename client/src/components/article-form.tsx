@@ -19,7 +19,7 @@ const GENERATION_STEPS: GenerationStep[] = [
   { id: "completion", label: "Finalizing Article", status: "pending" }
 ];
 
-export function ArticleForm() {
+export default function ArticleForm() {
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     defaultValues: {
       url: "",

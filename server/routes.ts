@@ -153,5 +153,40 @@ export function registerRoutes(app: Express) {
     }
   });
 
+  // Save edited article
+  app.post("/api/articles/save", async (req, res) => {
+    try {
+      const { content, title, metaDescription, tags } = req.body;
+
+      if (!content || !title || !metaDescription || !tags) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      const article = await db.insert(articles).values({
+        youtubeUrl: req.body.youtubeUrl || '',
+        title,
+        content,
+        metaDescription,
+        seoTitles: [title],
+        tags,
+        seoScore: req.body.seoScore || 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
+
+      res.status(200).json({
+        status: "success",
+        message: "Article saved successfully",
+        data: article[0]
+      });
+    } catch (error: any) {
+      console.error("Failed to save article:", error);
+      res.status(500).json({ 
+        message: "Failed to save article",
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
+  });
+
   return httpServer;
 }

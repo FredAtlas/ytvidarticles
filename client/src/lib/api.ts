@@ -4,6 +4,7 @@ import { queryClient } from "./queryClient";
 
 interface GenerateArticleOptions {
   onProgress?: (step: string) => void;
+  onSuccess?: () => void;
 }
 
 export function useGenerateArticle(options: GenerateArticleOptions = {}) {
@@ -17,11 +18,11 @@ export function useGenerateArticle(options: GenerateArticleOptions = {}) {
         body: JSON.stringify({ url }),
       });
 
-      const data = await res.json();
-      
       if (!res.ok) {
-        throw new Error(data.message || 'Failed to generate article');
+        throw new Error(await res.text());
       }
+
+      const data = await res.json();
 
       // Update progress through steps
       options.onProgress?.("analysis");
@@ -34,8 +35,37 @@ export function useGenerateArticle(options: GenerateArticleOptions = {}) {
     onSuccess: () => {
       // Invalidate the articles query to trigger a refresh
       queryClient.invalidateQueries({ queryKey: ["/api/articles"] });
+      options.onSuccess?.();
     },
     onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+export function useSaveArticle() {
+  return useMutation({
+    mutationFn: async (articleData: any) => {
+      const res = await fetch("/api/articles/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(articleData),
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/articles"] });
+    },
+    onError: (error: Error) => {
       toast({
         title: "Error",
         description: error.message,

@@ -7,9 +7,10 @@ import { Stream } from "stream";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
-const MAX_TOKENS_PER_CHUNK = 1000; // Reduced from 1500 to be more conservative
+const MAX_TOKENS_PER_CHUNK = 4000; // Increased from 1000 to handle longer contexts
 const CHARS_PER_TOKEN = 4; // Approximate characters per token
 const MAX_CHUNK_SIZE = MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN;
+const CHUNK_OVERLAP = 1000; // Number of tokens to overlap between chunks
 
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -44,34 +45,54 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
   });
 
   let currentChunk = '';
+  let previousChunkEnd = '';
   let estimatedTokens = 0;
+  let paragraphBuffer = '';
 
   for await (const line of rl) {
-    // Estimate tokens in current line (including punctuation and special characters)
-    const lineTokens = Math.ceil(line.length / CHARS_PER_TOKEN) + 2; // +2 for safety margin
+    // Add line to paragraph buffer until we hit a blank line or paragraph break
+    if (line.trim() === '') {
+      if (paragraphBuffer) {
+        const paragraph = paragraphBuffer.trim();
+        const paragraphTokens = Math.ceil(paragraph.length / CHARS_PER_TOKEN);
 
-    // If adding this line would exceed our token limit
-    if (estimatedTokens + lineTokens > MAX_TOKENS_PER_CHUNK) {
-      if (currentChunk) {
-        // Log chunk size for debugging
-        console.log(`Yielding chunk with estimated ${estimatedTokens} tokens`);
-        yield currentChunk;
-        currentChunk = '';
-        estimatedTokens = 0;
+        // If adding this paragraph would exceed our token limit
+        if (estimatedTokens + paragraphTokens > MAX_TOKENS_PER_CHUNK) {
+          // Keep track of the end of the current chunk for overlap
+          previousChunkEnd = currentChunk.split('\n').slice(-5).join('\n');
+
+          console.log(`Yielding chunk with estimated ${estimatedTokens} tokens`);
+          yield currentChunk;
+
+          // Start new chunk with overlap from previous chunk
+          currentChunk = previousChunkEnd + '\n\n' + paragraph;
+          estimatedTokens = Math.ceil(previousChunkEnd.length / CHARS_PER_TOKEN) + paragraphTokens;
+        } else {
+          // Add paragraph to current chunk
+          currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
+          estimatedTokens += paragraphTokens;
+        }
+
+        paragraphBuffer = '';
       }
+    } else {
+      paragraphBuffer += (paragraphBuffer ? ' ' : '') + line;
     }
-
-    // Add line to current chunk
-    currentChunk += (currentChunk ? '\n' : '') + line;
-    estimatedTokens += lineTokens;
 
     // Force chunk break if we're getting close to the limit
     if (estimatedTokens > MAX_TOKENS_PER_CHUNK * 0.9) {
+      previousChunkEnd = currentChunk.split('\n').slice(-5).join('\n');
       console.log(`Forcing chunk break at ${estimatedTokens} tokens (90% of limit)`);
       yield currentChunk;
-      currentChunk = '';
-      estimatedTokens = 0;
+      currentChunk = previousChunkEnd + '\n\n';
+      estimatedTokens = Math.ceil(previousChunkEnd.length / CHARS_PER_TOKEN);
     }
+  }
+
+  // Process any remaining paragraph in the buffer
+  if (paragraphBuffer) {
+    const paragraph = paragraphBuffer.trim();
+    currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
   }
 
   // Yield final chunk if there's anything left
@@ -102,7 +123,8 @@ export async function generateArticle(transcriptFilePath: string) {
             messages: [
               {
                 role: "system",
-                content: "Create a brief, focused summary of this transcript segment. Focus on key points only."
+                content: `Create a concise, coherent summary of this transcript segment, maintaining key details and context.
+                         If this segment continues from a previous part, ensure smooth integration of ideas.`
               },
               { role: "user", content: chunk }
             ],
@@ -117,36 +139,7 @@ export async function generateArticle(transcriptFilePath: string) {
         }
       } catch (error: any) {
         console.error(`Error processing chunk ${chunkCount}:`, error);
-        if (error.response?.status === 400 && error.response?.data?.error?.code === 'context_length_exceeded') {
-          console.log(`Token limit exceeded for chunk ${chunkCount}, attempting to split chunk further`);
-          // Split the problematic chunk in half and try again
-          const halfLength = Math.floor(chunk.length / 2);
-          const firstHalf = chunk.slice(0, halfLength);
-          const secondHalf = chunk.slice(halfLength);
-
-          // Process each half
-          for (const subChunk of [firstHalf, secondHalf]) {
-            const retryResponse = await retryWithDelay(() =>
-              openai.chat.completions.create({
-                model: "gpt-4",
-                messages: [
-                  {
-                    role: "system",
-                    content: "Create a brief, focused summary of this transcript segment. Focus on key points only."
-                  },
-                  { role: "user", content: subChunk }
-                ],
-                temperature: 0.7,
-              })
-            );
-
-            if (retryResponse.choices[0].message.content) {
-              summaries.push(retryResponse.choices[0].message.content);
-            }
-          }
-        } else {
-          throw error;
-        }
+        throw error;
       }
     }
 
@@ -165,6 +158,7 @@ export async function generateArticle(transcriptFilePath: string) {
             2. Include all important facts, figures, and statistics
             3. Create a clear, logical structure with proper transitions
             4. Use subheadings to organize different topics
+            5. Ensure the article flows naturally and maintains consistency
 
             Format your response as a JSON object with the following structure:
             {
