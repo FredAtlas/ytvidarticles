@@ -1,20 +1,19 @@
 import OpenAI from "openai";
 import { db } from "@db";
 import { settings } from "@db/schema";
-import { eq } from "drizzle-orm";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024
-const getOpenAIClient = async () => {
-  const settingsData = await db.query.settings.findFirst();
-  if (!settingsData?.openaiApiKey) {
-    throw new Error("OpenAI API key not configured");
+const getOpenAIClient = () => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OpenAI API key not configured in environment variables");
   }
-  
-  return new OpenAI({ apiKey: settingsData.openaiApiKey });
+
+  return new OpenAI({ apiKey });
 };
 
 export async function generateArticle(transcript: string) {
-  const openai = await getOpenAIClient();
+  const openai = getOpenAIClient();
   const settingsData = await db.query.settings.findFirst();
 
   const prompt = `

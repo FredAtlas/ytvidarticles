@@ -6,9 +6,9 @@ interface Message {
 }
 
 export async function humanizeContent(content: string) {
-  const settingsData = await db.query.settings.findFirst();
-  if (!settingsData?.perplexityApiKey) {
-    throw new Error("Perplexity API key not configured");
+  const apiKey = process.env.PERPLEXITY_API_KEY;
+  if (!apiKey) {
+    throw new Error("Perplexity API key not configured in environment variables");
   }
 
   const messages: Message[] = [
@@ -25,7 +25,7 @@ export async function humanizeContent(content: string) {
   const response = await fetch("https://api.perplexity.ai/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${settingsData.perplexityApiKey}`,
+      "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({

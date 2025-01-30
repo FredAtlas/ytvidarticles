@@ -16,8 +16,6 @@ export const articles = pgTable("articles", {
 
 export const settings = pgTable("settings", {
   id: serial("id").primaryKey(),
-  openaiApiKey: text("openai_api_key"),
-  perplexityApiKey: text("perplexity_api_key"),
   editorialGuidelines: text("editorial_guidelines"),
   writingSamples: jsonb("writing_samples").$type<string[]>(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

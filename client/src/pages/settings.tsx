@@ -2,7 +2,6 @@ import { useForm } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { useSettings, useUpdateSettings } from "@/lib/api";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -14,8 +13,6 @@ export default function Settings() {
 
   const form = useForm({
     defaultValues: {
-      openaiApiKey: settings?.openaiApiKey || "",
-      perplexityApiKey: settings?.perplexityApiKey || "",
       editorialGuidelines: settings?.editorialGuidelines || "",
       writingSamples: settings?.writingSamples?.join('\n\n') || "",
     },
@@ -38,31 +35,13 @@ export default function Settings() {
       <h1 className="text-3xl font-bold">Settings</h1>
       <Card>
         <CardHeader>
-          <CardTitle>Configuration</CardTitle>
+          <CardTitle>Content Generation Settings</CardTitle>
           <CardDescription>
-            Configure your API keys and writing preferences for content generation
+            Configure your writing preferences and style guidelines for content generation
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="openaiApiKey">OpenAI API Key</Label>
-              <Input
-                id="openaiApiKey"
-                type="password"
-                {...form.register("openaiApiKey")}
-                placeholder="sk-..."
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="perplexityApiKey">Perplexity API Key</Label>
-              <Input
-                id="perplexityApiKey"
-                type="password"
-                {...form.register("perplexityApiKey")}
-                placeholder="pplx-..."
-              />
-            </div>
             <div className="space-y-2">
               <Label htmlFor="editorialGuidelines">Editorial Guidelines</Label>
               <Alert variant="default" className="mb-2">
