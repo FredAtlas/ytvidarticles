@@ -33,12 +33,8 @@ export async function generateArticle(transcript: string) {
   const openai = getOpenAIClient();
   const settingsData = await db.query.settings.findFirst();
 
-  const prompt = `
-Generate an SEO-optimized article based on this video transcript. 
-${settingsData?.editorialGuidelines ? `Follow these editorial guidelines: ${settingsData.editorialGuidelines}` : ''}
-${settingsData?.writingSamples?.length ? `Use these writing samples as reference for tone and style: ${settingsData.writingSamples.join('\n')}` : ''}
-
-Respond with a JSON object containing:
+  const systemPrompt = `You are an expert content writer. Your task is to generate an SEO-optimized article based on a video transcript.
+You must respond ONLY with a valid JSON object in the following format:
 {
   "article": "the full article content",
   "titles": ["5 SEO optimized titles"],
@@ -46,17 +42,23 @@ Respond with a JSON object containing:
   "tags": ["at least 5 tags including primary keyword"],
   "primaryKeyword": "the main keyword",
   "seoScore": number between 0-100
-}
+}`;
+
+  const userPrompt = `Generate an SEO-optimized article based on this video transcript. 
+${settingsData?.editorialGuidelines ? `Follow these editorial guidelines: ${settingsData.editorialGuidelines}` : ''}
+${settingsData?.writingSamples?.length ? `Use these writing samples as reference for tone and style: ${settingsData.writingSamples.join('\n')}` : ''}
 
 Transcript:
-${transcript}
-`;
+${transcript}`;
 
   const response = await retryWithDelay(() => 
     openai.chat.completions.create({
       model: "gpt-4",
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.7,
     })
   );
 
@@ -82,11 +84,10 @@ export async function generateTitles(content: string) {
       messages: [
         {
           role: "system",
-          content: "Generate 5 SEO-optimized titles for the article. Output as JSON array.",
+          content: "You are an SEO expert. Generate 5 SEO-optimized titles for the article. Respond ONLY with a JSON object in this format: {\"titles\": [\"title1\", \"title2\", \"title3\", \"title4\", \"title5\"]}"
         },
-        { role: "user", content },
-      ],
-      response_format: { type: "json_object" },
+        { role: "user", content }
+      ]
     })
   );
 
@@ -112,11 +113,10 @@ export async function generateMetaDescription(content: string) {
       messages: [
         {
           role: "system",
-          content: "Generate a compelling 155-character meta description. Output as JSON with field: metaDescription",
+          content: "You are an SEO expert. Generate a compelling 155-character meta description. Respond ONLY with a JSON object in this format: {\"metaDescription\": \"your meta description here\"}"
         },
-        { role: "user", content },
-      ],
-      response_format: { type: "json_object" },
+        { role: "user", content }
+      ]
     })
   );
 
