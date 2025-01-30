@@ -4,7 +4,7 @@ import { settings } from "@db/schema";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
-const MAX_CHUNK_SIZE = 4000; // Conservative chunk size for GPT-4
+const MAX_CHUNK_SIZE = 8000; // Increased chunk size for better context
 
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -58,7 +58,7 @@ export async function generateArticle(transcript: string) {
   // Split transcript into chunks and process each
   const chunks = splitTranscriptIntoChunks(transcript);
 
-  // Step 1: Generate summaries for each chunk
+  // Step 1: Generate comprehensive summaries for each chunk
   console.log("Generating summaries for each chunk...");
   const summaries = await Promise.all(
     chunks.map(async (chunk, index) => {
@@ -69,7 +69,13 @@ export async function generateArticle(transcript: string) {
           messages: [
             {
               role: "system",
-              content: "Summarize the key points from this transcript segment, maintaining any important details, facts, and quotes."
+              content: `You are a detailed content analyzer. Create a comprehensive summary of this transcript segment, ensuring to:
+              1. Preserve all important facts, figures, and statistics
+              2. Keep meaningful quotes and key statements
+              3. Maintain the logical flow and connections between ideas
+              4. Include specific examples and case studies mentioned
+              5. Capture any step-by-step instructions or processes
+              Do not summarize too aggressively - retain the depth and richness of the original content.`
             },
             { role: "user", content: chunk }
           ],
@@ -93,10 +99,18 @@ export async function generateArticle(transcript: string) {
         messages: [
           {
             role: "system",
-            content: `You are an expert content writer. Create a well-structured article from this summary.
+            content: `You are an expert content writer. Create a detailed, well-structured article from this summary.
+            Follow these requirements:
+            1. Maintain the depth and comprehensiveness of the original content
+            2. Include all important facts, figures, and statistics
+            3. Preserve meaningful quotes and key statements
+            4. Create a clear, logical structure with proper transitions
+            5. Use subheadings to organize different topics
+            6. Aim for a thorough exploration of the subject matter
+
             Your response must follow this format exactly:
             {
-              "article": "your full article content",
+              "article": "your comprehensive article content with proper formatting and structure",
               "titles": ["title1", "title2", "title3", "title4", "title5"],
               "metaDescription": "your 155 char meta description",
               "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
@@ -106,7 +120,7 @@ export async function generateArticle(transcript: string) {
           },
           {
             role: "user",
-            content: `Create an article based on this summary following any editorial guidelines provided:
+            content: `Create a comprehensive article based on this summary following any editorial guidelines provided:
             ${settingsData?.editorialGuidelines ? `\nGuidelines: ${settingsData.editorialGuidelines}` : ''}
             ${settingsData?.writingSamples?.length ? `\nStyle Reference: ${settingsData.writingSamples[0]}` : ''}
 
