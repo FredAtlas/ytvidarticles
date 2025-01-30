@@ -154,7 +154,7 @@ export async function generateArticle(transcriptFilePath: string) {
     // Generate final article from all summaries
     const response = await retryWithDelay(() =>
       openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4-1106-preview",
         messages: [
           {
             role: "system",
@@ -165,7 +165,7 @@ export async function generateArticle(transcriptFilePath: string) {
             3. Create a clear, logical structure with proper transitions
             4. Use subheadings to organize different topics
 
-            Your response must follow this format exactly:
+            Format your response as a JSON object with the following structure:
             {
               "article": "your comprehensive article content with proper formatting and structure",
               "titles": ["title1", "title2", "title3", "title4", "title5"],
@@ -186,7 +186,6 @@ export async function generateArticle(transcriptFilePath: string) {
           }
         ],
         temperature: 0.7,
-        response_format: { type: "json_object" },
       })
     );
 
