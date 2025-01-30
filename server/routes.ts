@@ -18,6 +18,24 @@ export function registerRoutes(app: Express) {
     fs.mkdirSync(TEMP_DIR);
   }
 
+  // Get single article by ID
+  app.get("/api/articles/:id", async (req, res) => {
+    try {
+      const article = await db.query.articles.findFirst({
+        where: eq(articles.id, parseInt(req.params.id)),
+      });
+
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+
+      res.json(article);
+    } catch (error: any) {
+      console.error("Failed to fetch article:", error);
+      res.status(500).json({ message: "Failed to fetch article" });
+    }
+  });
+
   // Article generation
   app.post("/api/articles", async (req, res) => {
     try {

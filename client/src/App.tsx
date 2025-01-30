@@ -6,6 +6,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import History from "@/pages/history";
 import Settings from "@/pages/settings";
+import Analysis from "@/pages/analysis";
 import { Navbar } from "@/components/navbar";
 
 function Router() {
@@ -14,6 +15,8 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/history" component={History} />
       <Route path="/settings" component={Settings} />
+      <Route path="/analysis/:id" component={Analysis} />
+      <Route path="/edit/:id" component={Home} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -7,6 +7,21 @@ interface GenerateArticleOptions {
   onSuccess?: () => void;
 }
 
+export function useArticle(id?: string) {
+  return useQuery({
+    queryKey: ["/api/articles", id],
+    queryFn: async () => {
+      if (!id) return null;
+      const res = await fetch(`/api/articles/${id}`);
+      if (!res.ok) {
+        throw new Error("Failed to fetch article");
+      }
+      return res.json();
+    },
+    enabled: !!id,
+  });
+}
+
 export function useGenerateArticle(options: GenerateArticleOptions = {}) {
   return useMutation({
     mutationFn: async (url: string) => {
