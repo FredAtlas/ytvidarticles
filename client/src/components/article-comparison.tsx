@@ -5,7 +5,7 @@ import { InfoIcon } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { DiffMatchPatch } from "diff-match-patch";
+import DiffMatchPatch from "diff-match-patch";
 
 interface ArticleComparisonProps {
   article: string;
@@ -61,7 +61,7 @@ export function ArticleComparison({
   };
 
   return (
-    <Card className="mt-8">
+    <Card>
       <CardHeader>
         <CardTitle>Content Coverage Analysis</CardTitle>
       </CardHeader>
