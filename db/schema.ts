@@ -6,10 +6,13 @@ export const articles = pgTable("articles", {
   youtubeUrl: text("youtube_url").notNull(),
   title: text("title").notNull(),
   content: text("content").notNull(),
+  transcript: text("transcript").notNull().default(''),
   metaDescription: text("meta_description").notNull(),
   seoTitles: jsonb("seo_titles").notNull().$type<string[]>(),
   tags: jsonb("tags").notNull().$type<string[]>(),
   seoScore: integer("seo_score").notNull(),
+  keyTopics: jsonb("key_topics").notNull().default(['']).$type<string[]>(),
+  missingTopics: jsonb("missing_topics").default(['']).$type<string[]>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

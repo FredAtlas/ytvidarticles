@@ -40,7 +40,7 @@ export function registerRoutes(app: Express) {
       fs.writeFileSync(transcriptFile, transcript);
       console.log("Saved transcript to file:", transcriptFile);
 
-      // Step 2: Generate initial article
+      // Step 2: Generate initial article and analyze topics
       console.log("Generating article from transcript file");
       const openaiResult = await generateArticle(transcriptFile).catch(error => {
         console.error("OpenAI API Error:", error);
@@ -62,17 +62,21 @@ export function registerRoutes(app: Express) {
       });
       console.log("Successfully humanized content");
 
-      // Step 4: Save to database
+      // Step 4: Save to database with transcript and topics
       console.log("Saving article to database");
       const article = await db.insert(articles).values({
         youtubeUrl: url,
         title: openaiResult.titles[0],
         content: humanizedContent,
+        transcript: transcript,
         metaDescription: openaiResult.metaDescription,
         seoTitles: openaiResult.titles,
         tags: openaiResult.tags,
         seoScore: openaiResult.seoScore,
+        keyTopics: openaiResult.keyTopics || [],
+        missingTopics: openaiResult.missingTopics || [],
         createdAt: new Date(),
+        updatedAt: new Date(),
       }).returning();
       console.log("Successfully saved article to database");
 
@@ -156,7 +160,7 @@ export function registerRoutes(app: Express) {
   // Save edited article
   app.post("/api/articles/save", async (req, res) => {
     try {
-      const { content, title, metaDescription, tags } = req.body;
+      const { content, title, metaDescription, tags, transcript, keyTopics } = req.body;
 
       if (!content || !title || !metaDescription || !tags) {
         return res.status(400).json({ message: "Missing required fields" });
@@ -166,10 +170,13 @@ export function registerRoutes(app: Express) {
         youtubeUrl: req.body.youtubeUrl || '',
         title,
         content,
+        transcript: transcript || '',
         metaDescription,
         seoTitles: [title],
         tags,
         seoScore: req.body.seoScore || 0,
+        keyTopics: keyTopics || [],
+        missingTopics: [],
         createdAt: new Date(),
         updatedAt: new Date(),
       }).returning();

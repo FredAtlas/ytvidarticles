@@ -136,12 +136,13 @@ export async function generateArticle(transcriptFilePath: string) {
               {
                 role: "system",
                 content: `Create a concise summary of this transcript segment. Focus on key points and maintain context.
-                         Length: Keep it under 1000 words.`
+                         Length: Keep it under 1000 words.
+                         Also identify key topics and concepts discussed in this segment.`
               },
               { role: "user", content: chunk }
             ],
             temperature: 0.7,
-            max_tokens: 2000, // Explicitly limit response tokens
+            max_tokens: 2000,
           })
         );
 
@@ -188,9 +189,36 @@ export async function generateArticle(transcriptFilePath: string) {
       }
     }
 
-    console.log(`Successfully processed ${chunkCount} chunks. Generating final article...`);
+    console.log(`Successfully processed ${chunkCount} chunks. Analyzing content coverage...`);
 
-    // Generate final article from all summaries
+    // Analyze key topics in the transcript
+    const topicResponse = await retryWithDelay(() =>
+      openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: `Analyze the transcript summaries and identify:
+            1. All key topics, concepts, and themes discussed
+            2. Their relative importance and depth of coverage
+            3. Any potential gaps or topics that need more detail
+
+            Format your response as a JSON object with:
+            {
+              "keyTopics": ["topic1", "topic2", ...],
+              "missingTopics": ["topic1", "topic2", ...],
+              "topicSummary": "brief analysis of coverage"
+            }`
+          },
+          { role: "user", content: summaries.join("\n\n") }
+        ],
+        response_format: { type: "json_object" },
+      })
+    );
+
+    const topicAnalysis = JSON.parse(topicResponse.choices[0].message.content || "{}");
+
+    // Generate final article
     const response = await retryWithDelay(() =>
       openai.chat.completions.create({
         model: "gpt-4-1106-preview",
@@ -204,6 +232,7 @@ export async function generateArticle(transcriptFilePath: string) {
             3. Create a clear, logical structure with proper transitions
             4. Use subheadings to organize different topics
             5. Ensure the article flows naturally and maintains consistency
+            6. Cover all key topics identified: ${topicAnalysis.keyTopics?.join(", ")}
 
             Format your response as a JSON object with the following structure:
             {
@@ -211,7 +240,8 @@ export async function generateArticle(transcriptFilePath: string) {
               "titles": ["title1", "title2", "title3", "title4", "title5"],
               "metaDescription": "your 155 char meta description",
               "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-              "primaryKeyword": "main keyword",
+              "keyTopics": ${JSON.stringify(topicAnalysis.keyTopics || [])},
+              "missingTopics": ${JSON.stringify(topicAnalysis.missingTopics || [])},
               "seoScore": number
             }`
           },
@@ -238,7 +268,10 @@ ${settingsData?.writingSamples?.length ? `\nReference this writing style: ${sett
       console.log("Parsing OpenAI response...");
       const parsedContent = JSON.parse(content);
 
-      const requiredFields = ['article', 'titles', 'metaDescription', 'tags', 'primaryKeyword', 'seoScore'];
+      const requiredFields = [
+        'article', 'titles', 'metaDescription', 'tags', 
+        'keyTopics', 'missingTopics', 'seoScore'
+      ];
       const missingFields = requiredFields.filter(field => !(field in parsedContent));
 
       if (missingFields.length > 0) {
