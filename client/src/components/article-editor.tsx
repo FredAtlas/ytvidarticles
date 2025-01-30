@@ -5,26 +5,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import type { Article } from "@db/schema";
 
 interface ArticleEditorProps {
-  content: string;
-  titles: string[];
-  metaDescription: string;
-  tags: string[];
-  onSave: (data: { content: string; title: string; metaDescription: string; tags: string[] }) => void;
+  article: Article;
+  onSave: (data: Partial<Article>) => void;
 }
 
-export default function ArticleEditor({
-  content,
-  titles,
-  metaDescription,
-  tags,
-  onSave
-}: ArticleEditorProps) {
-  const [editedContent, setEditedContent] = useState(content);
-  const [selectedTitle, setSelectedTitle] = useState(titles[0]);
-  const [editedMeta, setEditedMeta] = useState(metaDescription);
-  const [editedTags, setEditedTags] = useState(tags);
+export function ArticleEditor({ article, onSave }: ArticleEditorProps) {
+  const [editedContent, setEditedContent] = useState(article.content);
+  const [selectedTitle, setSelectedTitle] = useState(article.title);
+  const [editedMeta, setEditedMeta] = useState(article.metaDescription);
+  const [editedTags, setEditedTags] = useState(article.tags);
 
   return (
     <div className="space-y-4">
@@ -37,7 +29,7 @@ export default function ArticleEditor({
             <div>
               <label className="text-sm font-medium">Title Variations</label>
               <ScrollArea className="h-32 w-full rounded-md border p-4">
-                {titles.map((title, i) => (
+                {article.seoTitles.map((title, i) => (
                   <div
                     key={i}
                     className={`p-2 cursor-pointer rounded hover:bg-accent ${
