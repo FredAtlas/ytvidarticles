@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useGenerateArticle } from "@/lib/api";
 import { Loader2 } from "lucide-react";
 
@@ -27,6 +27,9 @@ export function ArticleForm() {
     <Card>
       <CardHeader>
         <CardTitle>Generate Article</CardTitle>
+        <CardDescription>
+          Supports standard YouTube URLs and Shorts URLs
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -35,11 +38,11 @@ export function ArticleForm() {
               {...register("url", { 
                 required: "YouTube URL is required",
                 pattern: {
-                  value: /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$/,
-                  message: "Please enter a valid YouTube URL"
+                  value: /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/).+/,
+                  message: "Please enter a valid YouTube URL (standard or Shorts)"
                 }
               })}
-              placeholder="Enter YouTube URL"
+              placeholder="Enter YouTube URL (e.g., youtube.com/watch?v=... or youtube.com/shorts/...)"
               disabled={generateArticle.isPending}
             />
             {errors.url && (
