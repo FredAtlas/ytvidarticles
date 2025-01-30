@@ -1,4 +1,4 @@
-import YoutubeTranscript from 'youtube-transcript';
+import { YoutubeTranscript } from 'youtube-transcript';
 
 export async function getTranscript(url: string): Promise<string> {
   try {
