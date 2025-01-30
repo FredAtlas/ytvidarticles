@@ -7,7 +7,7 @@ import { Stream } from "stream";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
-const MAX_TOKENS_PER_CHUNK = 1500; // Conservative token estimate, leaving room for system prompts
+const MAX_TOKENS_PER_CHUNK = 1000; // Reduced from 1500 to be more conservative
 const CHARS_PER_TOKEN = 4; // Approximate characters per token
 const MAX_CHUNK_SIZE = MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN;
 
@@ -46,12 +46,14 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
   let estimatedTokens = 0;
 
   for await (const line of rl) {
-    // Estimate tokens in current line
-    const lineTokens = Math.ceil(line.length / CHARS_PER_TOKEN);
+    // Estimate tokens in current line (including punctuation and special characters)
+    const lineTokens = Math.ceil(line.length / CHARS_PER_TOKEN) + 2; // +2 for safety margin
 
+    // If adding this line would exceed our token limit
     if (estimatedTokens + lineTokens > MAX_TOKENS_PER_CHUNK) {
-      // If adding this line would exceed our token limit, yield current chunk
       if (currentChunk) {
+        // Log chunk size for debugging
+        console.log(`Yielding chunk with estimated ${estimatedTokens} tokens`);
         yield currentChunk;
         currentChunk = '';
         estimatedTokens = 0;
@@ -61,10 +63,19 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
     // Add line to current chunk
     currentChunk += (currentChunk ? '\n' : '') + line;
     estimatedTokens += lineTokens;
+
+    // Force chunk break if we're getting close to the limit
+    if (estimatedTokens > MAX_TOKENS_PER_CHUNK * 0.9) {
+      console.log(`Forcing chunk break at ${estimatedTokens} tokens (90% of limit)`);
+      yield currentChunk;
+      currentChunk = '';
+      estimatedTokens = 0;
+    }
   }
 
   // Yield final chunk if there's anything left
   if (currentChunk) {
+    console.log(`Yielding final chunk with estimated ${estimatedTokens} tokens`);
     yield currentChunk;
   }
 }
@@ -81,7 +92,7 @@ export async function generateArticle(transcriptFilePath: string) {
     // Process file in chunks
     for await (const chunk of readFileInChunks(transcriptFilePath)) {
       chunkCount++;
-      console.log(`Processing chunk ${chunkCount}`);
+      console.log(`Processing chunk ${chunkCount}, approximate size: ${chunk.length} characters`);
 
       try {
         const response = await retryWithDelay(() =>
@@ -90,12 +101,7 @@ export async function generateArticle(transcriptFilePath: string) {
             messages: [
               {
                 role: "system",
-                content: `You are a detailed content analyzer. Create a concise but comprehensive summary of this transcript segment, focusing on:
-                1. Key facts and statistics
-                2. Main ideas and concepts
-                3. Important quotes
-                4. Examples and case studies
-                5. Any step-by-step instructions`
+                content: "Create a brief, focused summary of this transcript segment. Focus on key points only."
               },
               { role: "user", content: chunk }
             ],
@@ -110,7 +116,36 @@ export async function generateArticle(transcriptFilePath: string) {
         }
       } catch (error: any) {
         console.error(`Error processing chunk ${chunkCount}:`, error);
-        throw new Error(`Failed to process transcript chunk ${chunkCount}: ${error.message}`);
+        if (error.response?.status === 400 && error.response?.data?.error?.code === 'context_length_exceeded') {
+          console.log(`Token limit exceeded for chunk ${chunkCount}, attempting to split chunk further`);
+          // Split the problematic chunk in half and try again
+          const halfLength = Math.floor(chunk.length / 2);
+          const firstHalf = chunk.slice(0, halfLength);
+          const secondHalf = chunk.slice(halfLength);
+
+          // Process each half
+          for (const subChunk of [firstHalf, secondHalf]) {
+            const retryResponse = await retryWithDelay(() =>
+              openai.chat.completions.create({
+                model: "gpt-4",
+                messages: [
+                  {
+                    role: "system",
+                    content: "Create a brief, focused summary of this transcript segment. Focus on key points only."
+                  },
+                  { role: "user", content: subChunk }
+                ],
+                temperature: 0.7,
+              })
+            );
+
+            if (retryResponse.choices[0].message.content) {
+              summaries.push(retryResponse.choices[0].message.content);
+            }
+          }
+        } else {
+          throw error;
+        }
       }
     }
 
