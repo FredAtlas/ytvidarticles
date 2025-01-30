@@ -4,7 +4,7 @@ import { db } from "@db";
 import { articles, settings } from "@db/schema";
 import { getTranscript } from "./lib/youtube";
 import { generateArticle } from "./services/openai";
-import { humanizeContent } from "./lib/perplexity";
+import { humanizeContent, integrateContent } from "./lib/perplexity";
 import { eq } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
@@ -208,6 +208,30 @@ export function registerRoutes(app: Express) {
       console.error("Failed to save article:", error);
       res.status(500).json({ 
         message: "Failed to save article",
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
+  });
+
+  // Add content integration endpoint
+  app.post("/api/articles/integrate", async (req, res) => {
+    try {
+      const { existingContent, newSection } = req.body;
+
+      if (!existingContent || !newSection) {
+        return res.status(400).json({ message: "Missing required content" });
+      }
+
+      const integratedContent = await integrateContent(existingContent, newSection);
+
+      res.status(200).json({
+        status: "success",
+        integratedContent
+      });
+    } catch (error: any) {
+      console.error("Content integration error:", error);
+      res.status(500).json({ 
+        message: "Failed to integrate content",
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
     }

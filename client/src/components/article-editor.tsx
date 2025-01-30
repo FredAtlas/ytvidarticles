@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArticleComparison } from "./article-comparison";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 
 interface ArticleEditorProps {
   content: string;
@@ -33,6 +34,39 @@ export default function ArticleEditor({
   const [selectedTitle, setSelectedTitle] = useState(titles[0]);
   const [editedMeta, setEditedMeta] = useState(metaDescription);
   const [editedTags, setEditedTags] = useState(tags);
+  const { toast } = useToast();
+
+  const handleAddSection = async (section: string) => {
+    try {
+      const response = await fetch("/api/articles/integrate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          existingContent: editedContent,
+          newSection: section
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to integrate content");
+      }
+
+      const { integratedContent } = await response.json();
+      setEditedContent(integratedContent);
+
+      toast({
+        title: "Content Added",
+        description: "New section has been integrated into the article",
+      });
+    } catch (error) {
+      console.error("Failed to integrate content:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add new section. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -139,6 +173,7 @@ export default function ArticleEditor({
                 transcript={transcript}
                 keyTopics={keyTopics}
                 missingTopics={missingTopics}
+                onAddSection={handleAddSection}
               />
             </TabsContent>
           </Tabs>
