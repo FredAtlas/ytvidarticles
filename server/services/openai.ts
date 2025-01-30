@@ -4,7 +4,7 @@ import { settings } from "@db/schema";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
-const MAX_CHUNK_SIZE = 8000; // Increased chunk size for better context
+const MAX_CHUNK_SIZE = 4000; // Reduced chunk size to stay within token limits
 
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -55,44 +55,43 @@ export async function generateArticle(transcript: string) {
 
   console.log(`Processing transcript in ${Math.ceil(transcript.length / MAX_CHUNK_SIZE)} chunks`);
 
-  // Split transcript into chunks and process each
-  const chunks = splitTranscriptIntoChunks(transcript);
-
-  // Step 1: Generate comprehensive summaries for each chunk
-  console.log("Generating summaries for each chunk...");
-  const summaries = await Promise.all(
-    chunks.map(async (chunk, index) => {
-      console.log(`Processing chunk ${index + 1}/${chunks.length}`);
-      const response = await retryWithDelay(() =>
-        openai.chat.completions.create({
-          model: "gpt-4",
-          messages: [
-            {
-              role: "system",
-              content: `You are a detailed content analyzer. Create a comprehensive summary of this transcript segment, ensuring to:
-              1. Preserve all important facts, figures, and statistics
-              2. Keep meaningful quotes and key statements
-              3. Maintain the logical flow and connections between ideas
-              4. Include specific examples and case studies mentioned
-              5. Capture any step-by-step instructions or processes
-              Do not summarize too aggressively - retain the depth and richness of the original content.`
-            },
-            { role: "user", content: chunk }
-          ],
-          temperature: 0.7,
-        })
-      );
-      return response.choices[0].message.content || '';
-    })
-  );
-
-  // Step 2: Combine summaries with structure
-  console.log("Combining summaries into structured content...");
-  const combinedSummary = summaries.join('\n\n');
-
-  // Step 3: Generate final article
-  console.log("Generating final article...");
   try {
+    // Split transcript into chunks and process each
+    const chunks = splitTranscriptIntoChunks(transcript);
+
+    // Step 1: Generate comprehensive summaries for each chunk
+    console.log("Generating summaries for each chunk...");
+    const summaries = await Promise.all(
+      chunks.map(async (chunk, index) => {
+        console.log(`Processing chunk ${index + 1}/${chunks.length}`);
+        const response = await retryWithDelay(() =>
+          openai.chat.completions.create({
+            model: "gpt-4",
+            messages: [
+              {
+                role: "system",
+                content: `You are a detailed content analyzer. Create a comprehensive summary of this transcript segment, ensuring to:
+                1. Preserve all important facts, figures, and statistics
+                2. Keep meaningful quotes and key statements
+                3. Maintain the logical flow and connections between ideas
+                4. Include specific examples and case studies mentioned
+                5. Capture any step-by-step instructions or processes`
+              },
+              { role: "user", content: chunk }
+            ],
+            temperature: 0.7,
+          })
+        );
+        return response.choices[0].message.content || '';
+      })
+    );
+
+    // Step 2: Combine summaries with structure
+    console.log("Combining summaries into structured content...");
+    const combinedSummary = summaries.join('\n\n');
+
+    // Step 3: Generate final article
+    console.log("Generating final article...");
     const response = await retryWithDelay(() =>
       openai.chat.completions.create({
         model: "gpt-4",
@@ -106,7 +105,6 @@ export async function generateArticle(transcript: string) {
             3. Preserve meaningful quotes and key statements
             4. Create a clear, logical structure with proper transitions
             5. Use subheadings to organize different topics
-            6. Aim for a thorough exploration of the subject matter
 
             Your response must follow this format exactly:
             {
