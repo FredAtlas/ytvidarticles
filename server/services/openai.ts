@@ -52,13 +52,12 @@ export async function generateArticle(transcript: string) {
   const openai = getOpenAIClient();
   const settingsData = await db.query.settings.findFirst();
 
-  // Create initial prompt with transcript
   const prompt = `
-Generate an SEO-optimized article based on this video transcript. 
+You are an expert content writer. Generate an SEO-optimized article based on this video transcript.
 ${settingsData?.editorialGuidelines ? `Follow these editorial guidelines: ${settingsData.editorialGuidelines}` : ''}
 ${settingsData?.writingSamples?.length ? `Use these writing samples as reference for tone and style: ${settingsData.writingSamples.join('\n')}` : ''}
 
-Respond with a JSON object containing:
+Format your response as a valid JSON object with the following structure:
 {
   "article": "the full article content",
   "titles": ["5 SEO optimized titles"],
@@ -68,14 +67,15 @@ Respond with a JSON object containing:
   "seoScore": number between 0-100
 }
 
-Transcript:
+Here is the transcript to analyze and convert into an article:
 ${transcript}
-`;
+
+Remember to maintain the factual accuracy and key points from the transcript while creating an engaging article.`;
 
   const response = await openai.chat.completions.create({
     model: "gpt-4",
     messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" },
+    temperature: 0.7,
   });
 
   const content = response.choices[0].message.content;
@@ -83,7 +83,27 @@ ${transcript}
     throw new Error("No content received from OpenAI");
   }
 
-  return JSON.parse(content);
+  try {
+    // Clean the response of any markdown formatting and validate JSON
+    const cleanedContent = content
+      .replace(/```json\s?|\s?```/g, '')
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+
+    const parsedContent = JSON.parse(cleanedContent);
+
+    // Validate required fields
+    const requiredFields = ['article', 'titles', 'metaDescription', 'tags', 'primaryKeyword', 'seoScore'];
+    const missingFields = requiredFields.filter(field => !(field in parsedContent));
+
+    if (missingFields.length > 0) {
+      throw new Error(`Missing required fields in response: ${missingFields.join(', ')}`);
+    }
+
+    return parsedContent;
+  } catch (error) {
+    console.error('Error parsing OpenAI response:', error);
+    throw new Error('Failed to generate properly formatted article. Please try again.');
+  }
 }
 
 export async function generateTitles(content: string) {
