@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { db } from "@db";
 import { settings } from "@db/schema";
+import fs from "fs";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
@@ -30,9 +31,9 @@ async function retryWithDelay<T>(
   }
 }
 
-function splitTranscriptIntoChunks(transcript: string): string[] {
-  // Split by sentences to maintain context
-  const sentences = transcript.match(/[^.!?]+[.!?]+/g) || [transcript];
+function splitFileIntoChunks(filePath: string): string[] {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const sentences = content.match(/[^.!?]+[.!?]+/g) || [content];
   const chunks: string[] = [];
   let currentChunk = '';
 
@@ -49,15 +50,15 @@ function splitTranscriptIntoChunks(transcript: string): string[] {
   return chunks;
 }
 
-export async function generateArticle(transcript: string) {
+export async function generateArticle(transcriptFilePath: string) {
   const openai = getOpenAIClient();
   const settingsData = await db.query.settings.findFirst();
 
-  console.log(`Processing transcript in ${Math.ceil(transcript.length / MAX_CHUNK_SIZE)} chunks`);
-
   try {
-    // Split transcript into chunks and process each
-    const chunks = splitTranscriptIntoChunks(transcript);
+    // Split file content into chunks
+    console.log("Splitting transcript file into chunks...");
+    const chunks = splitFileIntoChunks(transcriptFilePath);
+    console.log(`Processing transcript in ${chunks.length} chunks`);
 
     // Step 1: Generate comprehensive summaries for each chunk
     console.log("Generating summaries for each chunk...");
@@ -127,6 +128,7 @@ export async function generateArticle(transcript: string) {
           }
         ],
         temperature: 0.7,
+        response_format: { type: "json_object" },
       })
     );
 

@@ -6,9 +6,17 @@ import { getTranscript } from "./lib/youtube";
 import { generateArticle } from "./services/openai";
 import { humanizeContent } from "./lib/perplexity";
 import { eq } from "drizzle-orm";
+import fs from "fs";
+import path from "path";
 
 export function registerRoutes(app: Express) {
   const httpServer = createServer(app);
+  const TEMP_DIR = path.join(process.cwd(), 'temp');
+
+  // Ensure temp directory exists
+  if (!fs.existsSync(TEMP_DIR)) {
+    fs.mkdirSync(TEMP_DIR);
+  }
 
   // Article generation
   app.post("/api/articles", async (req, res) => {
@@ -27,17 +35,24 @@ export function registerRoutes(app: Express) {
       });
       console.log("Successfully fetched transcript");
 
+      // Save transcript to file for OpenAI processing
+      const transcriptFile = path.join(TEMP_DIR, `transcript-${Date.now()}.txt`);
+      fs.writeFileSync(transcriptFile, transcript);
+      console.log("Saved transcript to file:", transcriptFile);
+
       // Step 2: Generate initial article
-      console.log("Generating article from transcript");
-      const openaiResult = await generateArticle(transcript).catch(error => {
+      console.log("Generating article from transcript file");
+      const openaiResult = await generateArticle(transcriptFile).catch(error => {
         console.error("OpenAI API Error:", error);
-        // Pass through specific error messages from OpenAI
         if (error.response?.data?.error?.message) {
           throw new Error(`AI Service Error: ${error.response.data.error.message}`);
         }
         throw new Error("Failed to generate article. Please try again later.");
       });
       console.log("Successfully generated article");
+
+      // Clean up transcript file
+      fs.unlinkSync(transcriptFile);
 
       // Step 3: Humanize the content
       console.log("Humanizing content");
@@ -86,8 +101,20 @@ export function registerRoutes(app: Express) {
   // Get settings
   app.get("/api/settings", async (req, res) => {
     try {
-      const settingsData = await db.query.settings.findFirst();
-      res.json(settingsData || {});
+      let settingsData = await db.query.settings.findFirst();
+
+      // If no settings exist, create default settings
+      if (!settingsData) {
+        settingsData = await db.insert(settings)
+          .values({
+            editorialGuidelines: "",
+            writingSamples: [],
+          })
+          .returning()
+          .then(rows => rows[0]);
+      }
+
+      res.json(settingsData);
     } catch (error: any) {
       console.error("Failed to fetch settings:", error);
       res.status(500).json({ message: "Failed to fetch settings" });
@@ -97,19 +124,24 @@ export function registerRoutes(app: Express) {
   // Update settings
   app.put("/api/settings", async (req, res) => {
     try {
-      const settingsData = await db.query.settings.findFirst();
+      let settingsData = await db.query.settings.findFirst();
+
       if (settingsData) {
-        const updated = await db.update(settings)
+        // Update existing settings
+        settingsData = await db.update(settings)
           .set(req.body)
           .where(eq(settings.id, settingsData.id))
-          .returning();
-        res.json(updated[0]);
+          .returning()
+          .then(rows => rows[0]);
       } else {
-        const created = await db.insert(settings)
+        // Create new settings if they don't exist
+        settingsData = await db.insert(settings)
           .values(req.body)
-          .returning();
-        res.json(created[0]);
+          .returning()
+          .then(rows => rows[0]);
       }
+
+      res.json(settingsData);
     } catch (error: any) {
       console.error("Failed to update settings:", error);
       res.status(500).json({ message: "Failed to update settings" });
