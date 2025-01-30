@@ -10,34 +10,46 @@ interface GenerateArticleOptions {
 export function useGenerateArticle(options: GenerateArticleOptions = {}) {
   return useMutation({
     mutationFn: async (url: string) => {
-      // Step 1: Extracting transcript
-      options.onProgress?.("transcript");
-      const res = await fetch("/api/articles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
+      try {
+        // Step 1: Extracting transcript
+        options.onProgress?.("transcript");
+        const res = await fetch("/api/articles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
 
-      if (!res.ok) {
-        throw new Error(await res.text());
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(errorText);
+        }
+
+        const data = await res.json();
+
+        // Update progress through steps
+        options.onProgress?.("analysis");
+        options.onProgress?.("generation");
+        options.onProgress?.("refinement");
+        options.onProgress?.("completion");
+
+        return data.data;
+      } catch (error: any) {
+        console.error("Article generation error:", error);
+        throw error;
       }
-
-      const data = await res.json();
-
-      // Update progress through steps
-      options.onProgress?.("analysis");
-      options.onProgress?.("generation");
-      options.onProgress?.("refinement");
-      options.onProgress?.("completion");
-
-      return data.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       // Invalidate the articles query to trigger a refresh
       queryClient.invalidateQueries({ queryKey: ["/api/articles"] });
       options.onSuccess?.();
+
+      // Show success message
+      toast({
+        title: "Success",
+        description: "Article generated successfully. You can now edit it.",
+      });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
         title: "Error",
         description: error.message,

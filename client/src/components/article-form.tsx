@@ -47,10 +47,14 @@ export default function ArticleForm() {
   });
 
   const onSubmit = async (data: FormData) => {
-    // Reset progress
-    setSteps(GENERATION_STEPS);
-    setCurrentStep(0);
-    await generateArticle.mutateAsync(data.url);
+    try {
+      // Reset progress
+      setSteps(GENERATION_STEPS);
+      setCurrentStep(0);
+      await generateArticle.mutateAsync(data.url);
+    } catch (error) {
+      console.error("Failed to generate article:", error);
+    }
   };
 
   return (
