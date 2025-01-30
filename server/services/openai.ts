@@ -198,12 +198,8 @@ export async function generateArticle(transcriptFilePath: string) {
         messages: [
           {
             role: "system",
-            content: `Analyze the transcript summaries and identify:
-            1. All key topics, concepts, and themes discussed
-            2. Their relative importance and depth of coverage
-            3. Any potential gaps or topics that need more detail
-
-            Format your response as a JSON object with:
+            content: `Analyze the transcript summaries and identify key topics and potential gaps.
+            Respond in the following JSON format:
             {
               "keyTopics": ["topic1", "topic2", ...],
               "missingTopics": ["topic1", "topic2", ...],
@@ -212,13 +208,22 @@ export async function generateArticle(transcriptFilePath: string) {
           },
           { role: "user", content: summaries.join("\n\n") }
         ],
-        response_format: { type: "json_object" },
+        temperature: 0.7,
       })
     );
 
-    const topicAnalysis = JSON.parse(topicResponse.choices[0].message.content || "{}");
+    let topicAnalysis;
+    try {
+      const topicContent = topicResponse.choices[0].message.content || "{}";
+      // Handle both direct JSON and markdown-wrapped JSON
+      const jsonStr = topicContent.replace(/```json\n|\n```/g, '');
+      topicAnalysis = JSON.parse(jsonStr);
+    } catch (error) {
+      console.error("Failed to parse topic analysis:", error);
+      topicAnalysis = { keyTopics: [], missingTopics: [], topicSummary: "" };
+    }
 
-    // Generate final article
+    // Generate final article with combined knowledge
     const response = await retryWithDelay(() =>
       openai.chat.completions.create({
         model: "gpt-4-1106-preview",
@@ -234,16 +239,7 @@ export async function generateArticle(transcriptFilePath: string) {
             5. Ensure the article flows naturally and maintains consistency
             6. Cover all key topics identified: ${topicAnalysis.keyTopics?.join(", ")}
 
-            Format your response as a JSON object with the following structure:
-            {
-              "article": "your comprehensive article content with proper formatting and structure",
-              "titles": ["title1", "title2", "title3", "title4", "title5"],
-              "metaDescription": "your 155 char meta description",
-              "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-              "keyTopics": ${JSON.stringify(topicAnalysis.keyTopics || [])},
-              "missingTopics": ${JSON.stringify(topicAnalysis.missingTopics || [])},
-              "seoScore": number
-            }`
+            Address any missing or under-covered topics identified: ${topicAnalysis.missingTopics?.join(", ")}`
           },
           {
             role: "user",
@@ -278,7 +274,12 @@ ${settingsData?.writingSamples?.length ? `\nReference this writing style: ${sett
         throw new Error(`Invalid response structure. Missing fields: ${missingFields.join(', ')}`);
       }
 
-      return parsedContent;
+      // Include topic analysis in the response
+      return {
+        ...parsedContent,
+        keyTopics: topicAnalysis.keyTopics || [],
+        missingTopics: topicAnalysis.missingTopics || []
+      };
     } catch (parseError) {
       console.error("Failed to parse OpenAI response:", parseError);
       console.error("Raw response:", content);
