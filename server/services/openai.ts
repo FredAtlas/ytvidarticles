@@ -4,7 +4,7 @@ import { settings } from "@db/schema";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
-const MAX_CHUNK_LENGTH = 6000; // Safe limit for GPT-4 considering system message and response
+const MAX_CHUNK_LENGTH = 6000;
 
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -44,7 +44,7 @@ function splitTranscriptIntoChunks(transcript: string): string[] {
       currentLength = word.length;
     } else {
       currentChunk.push(word);
-      currentLength += word.length + 1; // +1 for space
+      currentLength += word.length + 1;
     }
   }
 
@@ -76,7 +76,6 @@ export async function generateArticle(transcript: string) {
             { role: "user", content: chunk }
           ],
           temperature: 0.7,
-          response_format: { type: "text" },
         })
       );
       return response.choices[0].message.content || '';
@@ -94,7 +93,16 @@ export async function generateArticle(transcript: string) {
         messages: [
           {
             role: "system",
-            content: "Generate an SEO-optimized article based on the provided summary. Return a JSON object."
+            content: `You are an expert content writer. Generate an SEO-optimized article based on the provided summary. 
+            Include the following in your response:
+            - A complete article
+            - 5 SEO optimized titles
+            - A 155-character meta description
+            - At least 5 tags including a primary keyword
+            - A primary keyword
+            - An SEO score between 0-100
+
+            Start your response with '{"article": "' and make sure all content is properly JSON escaped.`
           },
           {
             role: "user",
@@ -107,7 +115,6 @@ ${combinedSummary}`
           }
         ],
         temperature: 0.7,
-        response_format: { type: "json_object" },
       })
     );
 
@@ -116,12 +123,18 @@ ${combinedSummary}`
       throw new Error("No content received from OpenAI");
     }
 
-    return JSON.parse(content);
-  } catch (error: any) {
-    if (error instanceof SyntaxError) {
-      console.error("Failed to parse OpenAI response:", error);
+    try {
+      // Remove any markdown formatting or code blocks that might be in the response
+      const cleanedContent = content.replace(/```json\n?|\n?```/g, '');
+      console.log("Attempting to parse OpenAI response:", cleanedContent);
+      return JSON.parse(cleanedContent);
+    } catch (parseError) {
+      console.error("Failed to parse OpenAI response:", parseError);
+      console.error("Raw response:", content);
       throw new Error("Invalid response format from AI service");
     }
+  } catch (error: any) {
+    console.error("OpenAI API Error:", error);
     throw error;
   }
 }
@@ -135,11 +148,10 @@ export async function generateTitles(content: string) {
       messages: [
         {
           role: "system",
-          content: "Generate 5 SEO-optimized titles for the article."
+          content: "Generate 5 SEO-optimized titles for the article. Format your response as a JSON array of strings, starting with '[\"' and ending with '\"]'"
         },
         { role: "user", content }
       ],
-      response_format: { type: "json_object" },
     })
   );
 
@@ -149,7 +161,8 @@ export async function generateTitles(content: string) {
   }
 
   try {
-    return JSON.parse(responseContent).titles;
+    const cleanedContent = responseContent.replace(/```json\n?|\n?```/g, '');
+    return JSON.parse(cleanedContent);
   } catch (error) {
     console.error("Failed to parse OpenAI response for titles:", error);
     throw new Error("Invalid title format from AI service");
@@ -165,11 +178,10 @@ export async function generateMetaDescription(content: string) {
       messages: [
         {
           role: "system",
-          content: "Generate a compelling 155-character meta description."
+          content: "Generate a compelling 155-character meta description. Format your response as a JSON object with a 'metaDescription' field."
         },
         { role: "user", content }
       ],
-      response_format: { type: "json_object" },
     })
   );
 
@@ -179,7 +191,8 @@ export async function generateMetaDescription(content: string) {
   }
 
   try {
-    return JSON.parse(responseContent).metaDescription;
+    const cleanedContent = responseContent.replace(/```json\n?|\n?```/g, '');
+    return JSON.parse(cleanedContent).metaDescription;
   } catch (error) {
     console.error("Failed to parse OpenAI response for meta description:", error);
     throw new Error("Invalid meta description format from AI service");
