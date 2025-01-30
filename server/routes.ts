@@ -21,19 +21,23 @@ export function registerRoutes(app: Express) {
       // Step 1: Get transcript
       const transcript = await getTranscript(url).catch(error => {
         console.error("Failed to get transcript:", error);
-        throw new Error("Failed to fetch video transcript");
+        throw new Error("Could not fetch video transcript. Please check the URL and try again.");
       });
 
       // Step 2: Generate initial article
       const openaiResult = await generateArticle(transcript).catch(error => {
-        console.error("Failed to generate article:", error);
-        throw new Error("Failed to generate article content");
+        console.error("OpenAI API Error:", error);
+        // Pass through specific error messages from OpenAI
+        if (error.response?.data?.error?.message) {
+          throw new Error(`AI Service Error: ${error.response.data.error.message}`);
+        }
+        throw new Error("Failed to generate article. Please try again later.");
       });
 
       // Step 3: Humanize the content
       const humanizedContent = await humanizeContent(openaiResult.article).catch(error => {
         console.error("Failed to humanize content:", error);
-        throw new Error("Failed to refine article content");
+        throw new Error("Failed to refine article content. Please try again later.");
       });
 
       // Step 4: Save to database
@@ -50,7 +54,7 @@ export function registerRoutes(app: Express) {
       res.json(article[0]);
     } catch (error: any) {
       console.error("Article generation error:", error);
-      res.status(500).json({ 
+      res.status(error.status || 500).json({ 
         message: error.message || "Failed to generate article",
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
