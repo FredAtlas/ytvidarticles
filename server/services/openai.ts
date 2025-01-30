@@ -17,7 +17,6 @@ const getOpenAIClient = () => {
   if (!apiKey) {
     throw new Error("OpenAI API key not configured in environment variables");
   }
-
   return new OpenAI({ apiKey });
 };
 
@@ -191,55 +190,31 @@ export async function generateArticle(transcriptFilePath: string) {
 
     console.log(`Successfully processed ${chunkCount} chunks. Analyzing content coverage...`);
 
-    // Analyze key topics in the transcript
-    const topicResponse = await retryWithDelay(() =>
-      openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `Analyze the transcript summaries and identify key topics and potential gaps.
-            Respond in the following JSON format:
-            {
-              "keyTopics": ["topic1", "topic2", ...],
-              "missingTopics": ["topic1", "topic2", ...],
-              "topicSummary": "brief analysis of coverage"
-            }`
-          },
-          { role: "user", content: summaries.join("\n\n") }
-        ],
-        temperature: 0.7,
-      })
-    );
-
-    let topicAnalysis;
-    try {
-      const topicContent = topicResponse.choices[0].message.content || "{}";
-      // Handle both direct JSON and markdown-wrapped JSON
-      const jsonStr = topicContent.replace(/```json\n|\n```/g, '');
-      topicAnalysis = JSON.parse(jsonStr);
-    } catch (error) {
-      console.error("Failed to parse topic analysis:", error);
-      topicAnalysis = { keyTopics: [], missingTopics: [], topicSummary: "" };
-    }
-
-    // Generate final article with combined knowledge
+    // Generate final article with all the content
     const response = await retryWithDelay(() =>
       openai.chat.completions.create({
         model: "gpt-4-1106-preview",
         messages: [
           {
             role: "system",
-            content: `You are an expert content writer. Create a detailed, well-structured article from these summaries.
-            Follow these requirements:
-            1. Maintain the depth and comprehensiveness of the original content
-            2. Include all important facts, figures, and statistics
-            3. Create a clear, logical structure with proper transitions
-            4. Use subheadings to organize different topics
-            5. Ensure the article flows naturally and maintains consistency
-            6. Cover all key topics identified: ${topicAnalysis.keyTopics?.join(", ")}
+            content: `You are an expert content writer. Your task is to create a comprehensive article from the provided summaries.
+            Your response must be in JSON format with the following structure:
+            {
+              "article": "comprehensive article content with proper formatting",
+              "titles": ["title1", "title2", "title3", "title4", "title5"],
+              "metaDescription": "155-character meta description",
+              "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+              "keyTopics": ["topic1", "topic2"],
+              "missingTopics": ["topic1", "topic2"],
+              "seoScore": 85
+            }
 
-            Address any missing or under-covered topics identified: ${topicAnalysis.missingTopics?.join(", ")}`
+            Requirements:
+            1. Maintain depth and comprehensiveness
+            2. Include all important facts and statistics
+            3. Create clear structure with transitions
+            4. Use subheadings to organize topics
+            5. Ensure natural flow and consistency`
           },
           {
             role: "user",
@@ -274,12 +249,7 @@ ${settingsData?.writingSamples?.length ? `\nReference this writing style: ${sett
         throw new Error(`Invalid response structure. Missing fields: ${missingFields.join(', ')}`);
       }
 
-      // Include topic analysis in the response
-      return {
-        ...parsedContent,
-        keyTopics: topicAnalysis.keyTopics || [],
-        missingTopics: topicAnalysis.missingTopics || []
-      };
+      return parsedContent;
     } catch (parseError) {
       console.error("Failed to parse OpenAI response:", parseError);
       console.error("Raw response:", content);
