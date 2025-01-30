@@ -13,18 +13,22 @@ export function registerRoutes(app: Express) {
   // Article generation
   app.post("/api/articles", async (req, res) => {
     try {
+      console.log("Starting article generation process");
       const { url } = req.body;
       if (!url) {
         return res.status(400).json({ message: "YouTube URL is required" });
       }
 
       // Step 1: Get transcript
+      console.log("Fetching transcript for URL:", url);
       const transcript = await getTranscript(url).catch(error => {
         console.error("Failed to get transcript:", error);
         throw new Error("Could not fetch video transcript. Please check the URL and try again.");
       });
+      console.log("Successfully fetched transcript");
 
       // Step 2: Generate initial article
+      console.log("Generating article from transcript");
       const openaiResult = await generateArticle(transcript).catch(error => {
         console.error("OpenAI API Error:", error);
         // Pass through specific error messages from OpenAI
@@ -33,14 +37,18 @@ export function registerRoutes(app: Express) {
         }
         throw new Error("Failed to generate article. Please try again later.");
       });
+      console.log("Successfully generated article");
 
       // Step 3: Humanize the content
+      console.log("Humanizing content");
       const humanizedContent = await humanizeContent(openaiResult.article).catch(error => {
         console.error("Failed to humanize content:", error);
         throw new Error("Failed to refine article content. Please try again later.");
       });
+      console.log("Successfully humanized content");
 
       // Step 4: Save to database
+      console.log("Saving article to database");
       const article = await db.insert(articles).values({
         youtubeUrl: url,
         title: openaiResult.titles[0],
@@ -50,6 +58,7 @@ export function registerRoutes(app: Express) {
         tags: openaiResult.tags,
         seoScore: openaiResult.seoScore,
       }).returning();
+      console.log("Successfully saved article to database");
 
       res.json(article[0]);
     } catch (error: any) {
