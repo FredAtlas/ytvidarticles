@@ -46,12 +46,12 @@ export default function Home() {
       {article && (
         <ArticleEditor
           content={article.content}
-          titles={article.seoTitles}
+          titles={article.seoTitles || []}
           metaDescription={article.metaDescription}
-          tags={article.tags}
-          transcript={article.transcript}
-          keyTopics={article.keyTopics}
-          missingTopics={article.missingTopics}
+          tags={article.tags || []}
+          transcript={article.transcript || ""}
+          keyTopics={article.keyTopics || []}
+          missingTopics={article.missingTopics || []}
           onSave={handleSave}
         />
       )}
