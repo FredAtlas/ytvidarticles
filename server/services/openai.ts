@@ -4,7 +4,7 @@ import { settings } from "@db/schema";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
-const MAX_CHUNK_LENGTH = 6000;
+const MAX_CHUNK_SIZE = 4000; // Conservative chunk size for GPT-4
 
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -26,32 +26,26 @@ async function retryWithDelay<T>(
       await new Promise(resolve => setTimeout(resolve, delay));
       return retryWithDelay(fn, retries - 1, delay * 2);
     }
-    console.error('OpenAI API Error:', error);
     throw error;
   }
 }
 
 function splitTranscriptIntoChunks(transcript: string): string[] {
-  const words = transcript.split(' ');
+  // Split by sentences to maintain context
+  const sentences = transcript.match(/[^.!?]+[.!?]+/g) || [transcript];
   const chunks: string[] = [];
-  let currentChunk: string[] = [];
-  let currentLength = 0;
+  let currentChunk = '';
 
-  for (const word of words) {
-    if (currentLength + word.length > MAX_CHUNK_LENGTH) {
-      chunks.push(currentChunk.join(' '));
-      currentChunk = [word];
-      currentLength = word.length;
+  for (const sentence of sentences) {
+    if ((currentChunk + sentence).length > MAX_CHUNK_SIZE) {
+      if (currentChunk) chunks.push(currentChunk.trim());
+      currentChunk = sentence;
     } else {
-      currentChunk.push(word);
-      currentLength += word.length + 1;
+      currentChunk += ' ' + sentence;
     }
   }
 
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk.join(' '));
-  }
-
+  if (currentChunk) chunks.push(currentChunk.trim());
   return chunks;
 }
 
@@ -59,19 +53,23 @@ export async function generateArticle(transcript: string) {
   const openai = getOpenAIClient();
   const settingsData = await db.query.settings.findFirst();
 
-  // Split transcript into manageable chunks
+  console.log(`Processing transcript in ${Math.ceil(transcript.length / MAX_CHUNK_SIZE)} chunks`);
+
+  // Split transcript into chunks and process each
   const chunks = splitTranscriptIntoChunks(transcript);
 
-  // First, generate a summary from each chunk
+  // Step 1: Generate summaries for each chunk
+  console.log("Generating summaries for each chunk...");
   const summaries = await Promise.all(
-    chunks.map(async (chunk) => {
+    chunks.map(async (chunk, index) => {
+      console.log(`Processing chunk ${index + 1}/${chunks.length}`);
       const response = await retryWithDelay(() =>
         openai.chat.completions.create({
           model: "gpt-4",
           messages: [
             {
               role: "system",
-              content: "Summarize the key points from this transcript segment concisely."
+              content: "Summarize the key points from this transcript segment, maintaining any important details, facts, and quotes."
             },
             { role: "user", content: chunk }
           ],
@@ -82,10 +80,12 @@ export async function generateArticle(transcript: string) {
     })
   );
 
-  // Combine summaries
+  // Step 2: Combine summaries with structure
+  console.log("Combining summaries into structured content...");
   const combinedSummary = summaries.join('\n\n');
 
-  // Generate the final article from the combined summary
+  // Step 3: Generate final article
+  console.log("Generating final article...");
   try {
     const response = await retryWithDelay(() =>
       openai.chat.completions.create({
@@ -93,25 +93,25 @@ export async function generateArticle(transcript: string) {
         messages: [
           {
             role: "system",
-            content: `You are an expert content writer. Generate an SEO-optimized article based on the provided summary. 
-            Include the following in your response:
-            - A complete article
-            - 5 SEO optimized titles
-            - A 155-character meta description
-            - At least 5 tags including a primary keyword
-            - A primary keyword
-            - An SEO score between 0-100
-
-            Start your response with '{"article": "' and make sure all content is properly JSON escaped.`
+            content: `You are an expert content writer. Create a well-structured article from this summary.
+            Your response must follow this format exactly:
+            {
+              "article": "your full article content",
+              "titles": ["title1", "title2", "title3", "title4", "title5"],
+              "metaDescription": "your 155 char meta description",
+              "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+              "primaryKeyword": "main keyword",
+              "seoScore": number
+            }`
           },
           {
             role: "user",
-            content: `Write an article based on this summary:
-${settingsData?.editorialGuidelines ? `\nEditorial Guidelines: ${settingsData.editorialGuidelines}` : ''}
-${settingsData?.writingSamples?.length ? `\nWriting Style Reference: ${settingsData.writingSamples[0]}` : ''}
+            content: `Create an article based on this summary following any editorial guidelines provided:
+            ${settingsData?.editorialGuidelines ? `\nGuidelines: ${settingsData.editorialGuidelines}` : ''}
+            ${settingsData?.writingSamples?.length ? `\nStyle Reference: ${settingsData.writingSamples[0]}` : ''}
 
-Summary:
-${combinedSummary}`
+            Summary:
+            ${combinedSummary}`
           }
         ],
         temperature: 0.7,
@@ -124,18 +124,31 @@ ${combinedSummary}`
     }
 
     try {
-      // Remove any markdown formatting or code blocks that might be in the response
-      const cleanedContent = content.replace(/```json\n?|\n?```/g, '');
-      console.log("Attempting to parse OpenAI response:", cleanedContent);
-      return JSON.parse(cleanedContent);
+      // Clean up the response and parse JSON
+      const cleanedContent = content
+        .replace(/```json\s?|\s?```/g, '') // Remove code blocks
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // Remove control characters
+
+      console.log("Parsing OpenAI response...");
+      const parsedContent = JSON.parse(cleanedContent);
+
+      // Validate the response structure
+      const requiredFields = ['article', 'titles', 'metaDescription', 'tags', 'primaryKeyword', 'seoScore'];
+      const missingFields = requiredFields.filter(field => !(field in parsedContent));
+
+      if (missingFields.length > 0) {
+        throw new Error(`Invalid response structure. Missing fields: ${missingFields.join(', ')}`);
+      }
+
+      return parsedContent;
     } catch (parseError) {
       console.error("Failed to parse OpenAI response:", parseError);
       console.error("Raw response:", content);
-      throw new Error("Invalid response format from AI service");
+      throw new Error("Failed to parse AI response into required format");
     }
   } catch (error: any) {
     console.error("OpenAI API Error:", error);
-    throw error;
+    throw new Error(`Failed to generate article: ${error.message}`);
   }
 }
 
