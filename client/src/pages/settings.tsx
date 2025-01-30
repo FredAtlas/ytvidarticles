@@ -1,21 +1,36 @@
 import { useForm } from "react-hook-form";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useSettings, useUpdateSettings } from "@/lib/api";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { InfoIcon } from "lucide-react";
 
 export default function Settings() {
   const { data: settings } = useSettings();
   const updateSettings = useUpdateSettings();
 
-  const { register, handleSubmit } = useForm({
-    defaultValues: settings || {},
+  const form = useForm({
+    defaultValues: {
+      openaiApiKey: settings?.openaiApiKey || "",
+      perplexityApiKey: settings?.perplexityApiKey || "",
+      editorialGuidelines: settings?.editorialGuidelines || "",
+      writingSamples: settings?.writingSamples?.join('\n\n') || "",
+    },
   });
 
   const onSubmit = async (data: any) => {
-    await updateSettings.mutateAsync(data);
+    const writingSamples = data.writingSamples
+      .split('\n\n')
+      .map(sample => sample.trim())
+      .filter(sample => sample.length > 0);
+
+    await updateSettings.mutateAsync({
+      ...data,
+      writingSamples,
+    });
   };
 
   return (
@@ -24,42 +39,69 @@ export default function Settings() {
       <Card>
         <CardHeader>
           <CardTitle>Configuration</CardTitle>
+          <CardDescription>
+            Configure your API keys and writing preferences for content generation
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="space-y-2">
-              <Label>OpenAI API Key</Label>
+              <Label htmlFor="openaiApiKey">OpenAI API Key</Label>
               <Input
+                id="openaiApiKey"
                 type="password"
-                {...register("openaiApiKey")}
+                {...form.register("openaiApiKey")}
                 placeholder="sk-..."
               />
             </div>
             <div className="space-y-2">
-              <Label>Perplexity API Key</Label>
+              <Label htmlFor="perplexityApiKey">Perplexity API Key</Label>
               <Input
+                id="perplexityApiKey"
                 type="password"
-                {...register("perplexityApiKey")}
+                {...form.register("perplexityApiKey")}
                 placeholder="pplx-..."
               />
             </div>
             <div className="space-y-2">
-              <Label>Editorial Guidelines</Label>
+              <Label htmlFor="editorialGuidelines">Editorial Guidelines</Label>
+              <Alert variant="default" className="mb-2">
+                <InfoIcon className="h-4 w-4" />
+                <AlertDescription>
+                  Specify your content guidelines, including tone, style, formatting preferences, 
+                  and any specific requirements for your articles.
+                </AlertDescription>
+              </Alert>
               <Textarea
-                {...register("editorialGuidelines")}
-                placeholder="Enter your editorial guidelines..."
+                id="editorialGuidelines"
+                {...form.register("editorialGuidelines")}
+                placeholder="Example: Use a conversational tone, include real-world examples, break down complex topics into simple explanations..."
                 rows={4}
               />
             </div>
             <div className="space-y-2">
-              <Label>Writing Samples</Label>
+              <Label htmlFor="writingSamples">Writing Samples</Label>
+              <Alert variant="default" className="mb-2">
+                <InfoIcon className="h-4 w-4" />
+                <AlertDescription>
+                  Paste 2-3 paragraphs from your existing articles that best represent your writing style. 
+                  Separate multiple samples with blank lines.
+                </AlertDescription>
+              </Alert>
               <Textarea
-                {...register("writingSamples")}
-                placeholder="Enter writing samples (one per line)..."
-                rows={4}
+                id="writingSamples"
+                {...form.register("writingSamples")}
+                placeholder="Paste your writing samples here..."
+                rows={8}
               />
             </div>
-            <Button type="submit">Save Settings</Button>
+            <Button 
+              type="submit" 
+              disabled={updateSettings.isPending}
+              className="w-full"
+            >
+              Save Settings
+            </Button>
           </form>
         </CardContent>
       </Card>
