@@ -2,10 +2,14 @@ import OpenAI from "openai";
 import { db } from "@db";
 import { settings } from "@db/schema";
 import fs from "fs";
+import readline from "readline";
+import { Stream } from "stream";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
-const MAX_CHUNK_SIZE = 2000; // Further reduced chunk size to stay well within token limits
+const MAX_TOKENS_PER_CHUNK = 1500; // Conservative token estimate, leaving room for system prompts
+const CHARS_PER_TOKEN = 4; // Approximate characters per token
+const MAX_CHUNK_SIZE = MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN;
 
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -31,23 +35,38 @@ async function retryWithDelay<T>(
   }
 }
 
-function splitFileIntoChunks(filePath: string): string[] {
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const sentences = content.match(/[^.!?]+[.!?]+/g) || [content];
-  const chunks: string[] = [];
-  let currentChunk = '';
+async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
+  const fileStream = fs.createReadStream(filePath);
+  const rl = readline.createInterface({
+    input: fileStream,
+    crlfDelay: Infinity
+  });
 
-  for (const sentence of sentences) {
-    if ((currentChunk + sentence).length > MAX_CHUNK_SIZE) {
-      if (currentChunk) chunks.push(currentChunk.trim());
-      currentChunk = sentence;
-    } else {
-      currentChunk += ' ' + sentence;
+  let currentChunk = '';
+  let estimatedTokens = 0;
+
+  for await (const line of rl) {
+    // Estimate tokens in current line
+    const lineTokens = Math.ceil(line.length / CHARS_PER_TOKEN);
+
+    if (estimatedTokens + lineTokens > MAX_TOKENS_PER_CHUNK) {
+      // If adding this line would exceed our token limit, yield current chunk
+      if (currentChunk) {
+        yield currentChunk;
+        currentChunk = '';
+        estimatedTokens = 0;
+      }
     }
+
+    // Add line to current chunk
+    currentChunk += (currentChunk ? '\n' : '') + line;
+    estimatedTokens += lineTokens;
   }
 
-  if (currentChunk) chunks.push(currentChunk.trim());
-  return chunks;
+  // Yield final chunk if there's anything left
+  if (currentChunk) {
+    yield currentChunk;
+  }
 }
 
 export async function generateArticle(transcriptFilePath: string) {
@@ -55,57 +74,61 @@ export async function generateArticle(transcriptFilePath: string) {
   const settingsData = await db.query.settings.findFirst();
 
   try {
-    // Split file content into chunks
-    console.log("Splitting transcript file into chunks...");
-    const chunks = splitFileIntoChunks(transcriptFilePath);
-    console.log(`Processing transcript in ${chunks.length} chunks`);
+    console.log("Processing transcript file in chunks...");
+    const summaries: string[] = [];
+    let chunkCount = 0;
 
-    // Step 1: Generate comprehensive summaries for each chunk
-    console.log("Generating summaries for each chunk...");
-    const summaries = await Promise.all(
-      chunks.map(async (chunk, index) => {
-        console.log(`Processing chunk ${index + 1}/${chunks.length}`);
+    // Process file in chunks
+    for await (const chunk of readFileInChunks(transcriptFilePath)) {
+      chunkCount++;
+      console.log(`Processing chunk ${chunkCount}`);
+
+      try {
         const response = await retryWithDelay(() =>
           openai.chat.completions.create({
             model: "gpt-4",
             messages: [
               {
                 role: "system",
-                content: `You are a detailed content analyzer. Create a comprehensive summary of this transcript segment, ensuring to:
-                1. Preserve all important facts, figures, and statistics
-                2. Keep meaningful quotes and key statements
-                3. Maintain the logical flow and connections between ideas
-                4. Include specific examples and case studies mentioned
-                5. Capture any step-by-step instructions or processes`
+                content: `You are a detailed content analyzer. Create a concise but comprehensive summary of this transcript segment, focusing on:
+                1. Key facts and statistics
+                2. Main ideas and concepts
+                3. Important quotes
+                4. Examples and case studies
+                5. Any step-by-step instructions`
               },
               { role: "user", content: chunk }
             ],
             temperature: 0.7,
           })
         );
-        return response.choices[0].message.content || '';
-      })
-    );
 
-    // Step 2: Combine summaries with structure
-    console.log("Combining summaries into structured content...");
-    const combinedSummary = summaries.join('\n\n');
+        const summary = response.choices[0].message.content;
+        if (summary) {
+          summaries.push(summary);
+          console.log(`Successfully processed chunk ${chunkCount}`);
+        }
+      } catch (error: any) {
+        console.error(`Error processing chunk ${chunkCount}:`, error);
+        throw new Error(`Failed to process transcript chunk ${chunkCount}: ${error.message}`);
+      }
+    }
 
-    // Step 3: Generate final article
-    console.log("Generating final article...");
+    console.log(`Successfully processed ${chunkCount} chunks. Generating final article...`);
+
+    // Generate final article from all summaries
     const response = await retryWithDelay(() =>
       openai.chat.completions.create({
         model: "gpt-4",
         messages: [
           {
             role: "system",
-            content: `You are an expert content writer. Create a detailed, well-structured article from this summary.
+            content: `You are an expert content writer. Create a detailed, well-structured article from these summaries.
             Follow these requirements:
             1. Maintain the depth and comprehensiveness of the original content
             2. Include all important facts, figures, and statistics
-            3. Preserve meaningful quotes and key statements
-            4. Create a clear, logical structure with proper transitions
-            5. Use subheadings to organize different topics
+            3. Create a clear, logical structure with proper transitions
+            4. Use subheadings to organize different topics
 
             Your response must follow this format exactly:
             {
@@ -119,12 +142,12 @@ export async function generateArticle(transcriptFilePath: string) {
           },
           {
             role: "user",
-            content: `Create a comprehensive article based on this summary following any editorial guidelines provided:
+            content: `Create a comprehensive article based on these summaries following the editorial guidelines:
             ${settingsData?.editorialGuidelines ? `\nGuidelines: ${settingsData.editorialGuidelines}` : ''}
             ${settingsData?.writingSamples?.length ? `\nStyle Reference: ${settingsData.writingSamples[0]}` : ''}
 
-            Summary:
-            ${combinedSummary}`
+            Summaries:
+            ${summaries.join('\n\n')}`
           }
         ],
         temperature: 0.7,
@@ -138,15 +161,13 @@ export async function generateArticle(transcriptFilePath: string) {
     }
 
     try {
-      // Clean up the response and parse JSON
       const cleanedContent = content
-        .replace(/```json\s?|\s?```/g, '') // Remove code blocks
-        .replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // Remove control characters
+        .replace(/```json\s?|\s?```/g, '')
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
 
       console.log("Parsing OpenAI response...");
       const parsedContent = JSON.parse(cleanedContent);
 
-      // Validate the response structure
       const requiredFields = ['article', 'titles', 'metaDescription', 'tags', 'primaryKeyword', 'seoScore'];
       const missingFields = requiredFields.filter(field => !(field in parsedContent));
 
