@@ -3,7 +3,7 @@ import { createServer } from "http";
 import { db } from "@db";
 import { articles, settings } from "@db/schema";
 import { getTranscript } from "./lib/youtube";
-import { generateArticle } from "./lib/openai";
+import { generateArticle } from "./services/openai";
 import { humanizeContent } from "./lib/perplexity";
 import { eq } from "drizzle-orm";
 
@@ -14,10 +14,29 @@ export function registerRoutes(app: Express) {
   app.post("/api/articles", async (req, res) => {
     try {
       const { url } = req.body;
-      const transcript = await getTranscript(url);
-      const openaiResult = await generateArticle(transcript);
-      const humanizedContent = await humanizeContent(openaiResult.article);
+      if (!url) {
+        return res.status(400).json({ message: "YouTube URL is required" });
+      }
 
+      // Step 1: Get transcript
+      const transcript = await getTranscript(url).catch(error => {
+        console.error("Failed to get transcript:", error);
+        throw new Error("Failed to fetch video transcript");
+      });
+
+      // Step 2: Generate initial article
+      const openaiResult = await generateArticle(transcript).catch(error => {
+        console.error("Failed to generate article:", error);
+        throw new Error("Failed to generate article content");
+      });
+
+      // Step 3: Humanize the content
+      const humanizedContent = await humanizeContent(openaiResult.article).catch(error => {
+        console.error("Failed to humanize content:", error);
+        throw new Error("Failed to refine article content");
+      });
+
+      // Step 4: Save to database
       const article = await db.insert(articles).values({
         youtubeUrl: url,
         title: openaiResult.titles[0],
@@ -29,8 +48,12 @@ export function registerRoutes(app: Express) {
       }).returning();
 
       res.json(article[0]);
-    } catch (error) {
-      res.status(500).json({ message: error.message });
+    } catch (error: any) {
+      console.error("Article generation error:", error);
+      res.status(500).json({ 
+        message: error.message || "Failed to generate article",
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
     }
   });
 
@@ -41,8 +64,9 @@ export function registerRoutes(app: Express) {
         orderBy: (articles, { desc }) => [desc(articles.createdAt)]
       });
       res.json(allArticles);
-    } catch (error) {
-      res.status(500).json({ message: error.message });
+    } catch (error: any) {
+      console.error("Failed to fetch articles:", error);
+      res.status(500).json({ message: "Failed to fetch articles" });
     }
   });
 
@@ -51,8 +75,9 @@ export function registerRoutes(app: Express) {
     try {
       const settingsData = await db.query.settings.findFirst();
       res.json(settingsData || {});
-    } catch (error) {
-      res.status(500).json({ message: error.message });
+    } catch (error: any) {
+      console.error("Failed to fetch settings:", error);
+      res.status(500).json({ message: "Failed to fetch settings" });
     }
   });
 
@@ -72,8 +97,9 @@ export function registerRoutes(app: Express) {
           .returning();
         res.json(created[0]);
       }
-    } catch (error) {
-      res.status(500).json({ message: error.message });
+    } catch (error: any) {
+      console.error("Failed to update settings:", error);
+      res.status(500).json({ message: "Failed to update settings" });
     }
   });
 
