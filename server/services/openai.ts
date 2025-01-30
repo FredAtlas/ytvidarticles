@@ -227,14 +227,15 @@ export async function generateTitles(content: string) {
 
   const response = await retryWithDelay(() =>
     openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4-1106-preview",
       messages: [
         {
           role: "system",
-          content: "Generate 5 SEO-optimized titles for the article. Format your response as a JSON array of strings, starting with '[\"' and ending with '\"]'"
+          content: "Generate 5 SEO-optimized titles for the article. Format your response as a JSON array of strings."
         },
         { role: "user", content }
       ],
+      response_format: { type: "json_object" }
     })
   );
 

@@ -36,7 +36,7 @@ ${transcript}
 `;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-4-1106-preview",
     messages: [{ role: "user", content: prompt }],
     response_format: { type: "json_object" },
   });
