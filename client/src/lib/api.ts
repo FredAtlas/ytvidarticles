@@ -16,23 +16,19 @@ export function useGenerateArticle(options: GenerateArticleOptions = {}) {
         body: JSON.stringify({ url }),
       });
 
+      const data = await res.json();
+      
       if (!res.ok) {
-        throw new Error(await res.text());
+        throw new Error(data.message || 'Failed to generate article');
       }
 
-      // Step 2: Analyzing content (simulated by the backend)
+      // Update progress through steps
       options.onProgress?.("analysis");
-
-      // Step 3: Generating initial draft
       options.onProgress?.("generation");
-
-      // Step 4: Refining content
       options.onProgress?.("refinement");
-
-      // Step 5: Finalizing
       options.onProgress?.("completion");
 
-      return res.json();
+      return data.data;
     },
     onError: (error) => {
       toast({

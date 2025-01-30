@@ -72,10 +72,15 @@ export function registerRoutes(app: Express) {
         seoTitles: openaiResult.titles,
         tags: openaiResult.tags,
         seoScore: openaiResult.seoScore,
+        createdAt: new Date(),
       }).returning();
       console.log("Successfully saved article to database");
 
-      res.json(article[0]);
+      res.status(200).json({
+        status: "success",
+        message: "Article generated successfully",
+        data: article[0]
+      });
     } catch (error: any) {
       console.error("Article generation error:", error);
       res.status(error.status || 500).json({ 
