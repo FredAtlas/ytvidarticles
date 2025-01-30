@@ -1,48 +1,46 @@
 import OpenAI from "openai";
-import { z } from "zod";
+import { db } from "@db";
+import { settings } from "@db/schema";
+import { eq } from "drizzle-orm";
 
-// the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// the newest OpenAI model is "gpt-4o" which was released May 13, 2024
+const getOpenAIClient = async () => {
+  const settingsData = await db.query.settings.findFirst();
+  if (!settingsData?.openaiApiKey) {
+    throw new Error("OpenAI API key not configured");
+  }
+  
+  return new OpenAI({ apiKey: settingsData.openaiApiKey });
+};
 
-export interface ArticleGeneration {
-  content: string;
-  titles: string[];
-  metaDescription: string;
-  tags: string[];
-  seoScore: number;
+export async function generateArticle(transcript: string) {
+  const openai = await getOpenAIClient();
+  const settingsData = await db.query.settings.findFirst();
+
+  const prompt = `
+Generate an SEO-optimized article based on this video transcript. 
+${settingsData?.editorialGuidelines ? `Follow these editorial guidelines: ${settingsData.editorialGuidelines}` : ''}
+${settingsData?.writingSamples?.length ? `Use these writing samples as reference for tone and style: ${settingsData.writingSamples.join('\n')}` : ''}
+
+Respond with a JSON object containing:
+{
+  "article": "the full article content",
+  "titles": ["5 SEO optimized titles"],
+  "metaDescription": "155 character meta description",
+  "tags": ["at least 5 tags including primary keyword"],
+  "primaryKeyword": "the main keyword",
+  "seoScore": number between 0-100
 }
 
-const articleResponseSchema = z.object({
-  content: z.string(),
-  titles: z.array(z.string()),
-  metaDescription: z.string().max(155),
-  tags: z.array(z.string()),
-  seoScore: z.number().min(0).max(100)
-});
+Transcript:
+${transcript}
+`;
 
-export async function generateArticle(transcript: string): Promise<ArticleGeneration> {
-  try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert SEO content writer. Generate an article based on the provided transcript along with SEO metadata."
-        },
-        {
-          role: "user",
-          content: `Generate an SEO-optimized article based on this transcript along with 5 title variations, a 155-character meta description, and 5+ relevant tags. Format the response as JSON with these fields: content, titles (array), metaDescription (max 155 chars), tags (array), and seoScore (0-100).\n\nTranscript:\n${transcript}`
-        }
-      ],
-      response_format: { type: "json_object" }
-    });
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{ role: "user", content: prompt }],
+    response_format: { type: "json_object" },
+  });
 
-    const result = articleResponseSchema.parse(
-      JSON.parse(response.choices[0].message.content)
-    );
-    
-    return result;
-  } catch (error) {
-    throw new Error(`Failed to generate article: ${error.message}`);
-  }
+  return JSON.parse(response.choices[0].message.content);
 }

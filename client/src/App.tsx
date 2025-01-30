@@ -3,10 +3,10 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
-import Home from "@/pages/Home";
-import History from "@/pages/History";
-import Settings from "@/pages/Settings";
-import Navigation from "@/components/Navigation";
+import Home from "@/pages/home";
+import History from "@/pages/history";
+import Settings from "@/pages/settings";
+import { Navbar } from "@/components/navbar";
 
 function Router() {
   return (
@@ -23,10 +23,8 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="min-h-screen bg-background">
-        <Navigation />
-        <main className="container mx-auto p-4">
-          <Router />
-        </main>
+        <Navbar />
+        <Router />
       </div>
       <Toaster />
     </QueryClientProvider>

@@ -1,33 +1,43 @@
-interface PerplexityResponse {
+import { db } from "@db";
+
+interface Message {
+  role: "system" | "user" | "assistant";
   content: string;
 }
 
-export async function humanizeContent(content: string): Promise<string> {
+export async function humanizeContent(content: string) {
+  const settingsData = await db.query.settings.findFirst();
+  if (!settingsData?.perplexityApiKey) {
+    throw new Error("Perplexity API key not configured");
+  }
+
+  const messages: Message[] = [
+    {
+      role: "system",
+      content: "You are an expert writer. Make the following content more human-like and natural while preserving SEO optimization."
+    },
+    {
+      role: "user",
+      content
+    }
+  ];
+
   const response = await fetch("https://api.perplexity.ai/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+      "Authorization": `Bearer ${settingsData.perplexityApiKey}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
       model: "llama-3.1-sonar-small-128k-online",
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert at making AI-generated content sound more natural and human-like. Rewrite the given content to sound more natural while maintaining the same information and SEO value."
-        },
-        {
-          role: "user",
-          content
-        }
-      ],
+      messages,
       temperature: 0.7,
       max_tokens: 4000
     })
   });
 
   if (!response.ok) {
-    throw new Error(`Perplexity API error: ${response.statusText}`);
+    throw new Error("Failed to humanize content");
   }
 
   const data = await response.json();
