@@ -23,6 +23,8 @@ export default function Home() {
         ...editedArticle,
         youtubeUrl: article?.youtubeUrl,
         seoScore: article?.seoScore,
+        transcript: article?.transcript,
+        keyTopics: article?.keyTopics,
       });
 
       toast({
@@ -47,6 +49,9 @@ export default function Home() {
           titles={article.seoTitles}
           metaDescription={article.metaDescription}
           tags={article.tags}
+          transcript={article.transcript}
+          keyTopics={article.keyTopics}
+          missingTopics={article.missingTopics}
           onSave={handleSave}
         />
       )}
