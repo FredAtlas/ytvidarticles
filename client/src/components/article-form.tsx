@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { ProgressSteps, type ProgressStep } from "@/components/ui/progress-steps";
 import { ArticleEditor } from "./article-editor";
 import type { Article } from "@db/schema";
+import { toast } from "@/hooks/use-toast";
 
 interface FormData {
   url: string;
@@ -21,6 +22,7 @@ export function ArticleForm() {
     { label: "Saving article", status: "waiting" }
   ]);
   const [generatedArticle, setGeneratedArticle] = useState<Article | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     defaultValues: {
@@ -28,35 +30,58 @@ export function ArticleForm() {
     },
   });
 
-  const generateArticle = useGenerateArticle();
-
   const onSubmit = async (data: FormData) => {
+    setIsGenerating(true);
+    setGeneratedArticle(null);
+
     try {
-      setGeneratedArticle(null); // Reset any previous article
       const eventSource = new EventSource(`/api/articles?url=${encodeURIComponent(data.url)}`);
 
       eventSource.onmessage = (event) => {
         const eventData = JSON.parse(event.data);
+
         if (eventData.error) {
           eventSource.close();
-          throw new Error(eventData.error);
-        } else if (eventData.steps) {
+          toast({
+            title: "Error",
+            description: eventData.error,
+            variant: "destructive",
+          });
+          setIsGenerating(false);
+          return;
+        }
+
+        if (eventData.steps) {
           setGenerationSteps(eventData.steps.map((step: any) => ({
             label: step.step,
             status: step.status
           })));
-        } else if (eventData.article) {
-          setGeneratedArticle(eventData.article);
+        }
+
+        // Check if all steps are completed
+        const allCompleted = eventData.steps?.every((step: any) => step.status === 'completed');
+        if (allCompleted) {
           eventSource.close();
+          setIsGenerating(false);
         }
       };
 
       eventSource.onerror = () => {
         eventSource.close();
-        throw new Error("Failed to generate article");
+        setIsGenerating(false);
+        toast({
+          title: "Error",
+          description: "Failed to generate article. Please try again.",
+          variant: "destructive",
+        });
       };
     } catch (error) {
-      console.error("Generation error:", error);
+      setIsGenerating(false);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive",
+      });
     }
   };
 
@@ -78,7 +103,7 @@ export function ArticleForm() {
                   }
                 })}
                 placeholder="Enter YouTube URL"
-                disabled={generateArticle.isPending}
+                disabled={isGenerating}
               />
               {errors.url && (
                 <p className="text-sm text-destructive mt-1">{errors.url.message}</p>
@@ -86,10 +111,10 @@ export function ArticleForm() {
             </div>
             <Button 
               type="submit" 
-              disabled={generateArticle.isPending}
+              disabled={isGenerating}
               className="w-full"
             >
-              {generateArticle.isPending ? (
+              {isGenerating ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Generating article...
@@ -100,7 +125,7 @@ export function ArticleForm() {
             </Button>
           </form>
 
-          {generateArticle.isPending && (
+          {isGenerating && (
             <div className="mt-6">
               <ProgressSteps steps={generationSteps} />
             </div>
