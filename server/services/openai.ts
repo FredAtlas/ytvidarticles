@@ -5,7 +5,7 @@ import fs from "fs";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
-const MAX_CHUNK_SIZE = 4000; // Reduced chunk size to stay within token limits
+const MAX_CHUNK_SIZE = 2000; // Further reduced chunk size to stay well within token limits
 
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;

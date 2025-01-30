@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,30 +6,48 @@ import { Textarea } from "@/components/ui/textarea";
 import { useSettings, useUpdateSettings } from "@/lib/api";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { InfoIcon } from "lucide-react";
+import { InfoIcon, Loader2 } from "lucide-react";
 
 export default function Settings() {
-  const { data: settings } = useSettings();
+  const { data: settings, isLoading } = useSettings();
   const updateSettings = useUpdateSettings();
 
   const form = useForm({
     defaultValues: {
-      editorialGuidelines: settings?.editorialGuidelines || "",
-      writingSamples: settings?.writingSamples?.join('\n\n') || "",
+      editorialGuidelines: "",
+      writingSamples: "",
     },
   });
+
+  // Update form when settings are loaded
+  useEffect(() => {
+    if (settings) {
+      form.reset({
+        editorialGuidelines: settings.editorialGuidelines || "",
+        writingSamples: settings.writingSamples?.join('\n\n') || "",
+      });
+    }
+  }, [settings, form]);
 
   const onSubmit = async (data: any) => {
     const writingSamples = data.writingSamples
       .split('\n\n')
-      .map(sample => sample.trim())
-      .filter(sample => sample.length > 0);
+      .map((sample: string) => sample.trim())
+      .filter((sample: string) => sample.length > 0);
 
     await updateSettings.mutateAsync({
-      ...data,
+      editorialGuidelines: data.editorialGuidelines,
       writingSamples,
     });
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[200px]">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8 space-y-8">
@@ -79,7 +98,14 @@ export default function Settings() {
               disabled={updateSettings.isPending}
               className="w-full"
             >
-              Save Settings
+              {updateSettings.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Settings"
+              )}
             </Button>
           </form>
         </CardContent>
