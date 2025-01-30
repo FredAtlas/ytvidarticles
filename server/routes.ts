@@ -13,10 +13,14 @@ export function registerRoutes(app: Express) {
   // Article generation
   app.post("/api/articles", async (req, res) => {
     try {
-      const { url } = req.body;
+      // Get URL from either query params or request body
+      const url = req.body.url;
+
       if (!url) {
         return res.status(400).json({ message: "YouTube URL is required" });
       }
+
+      console.log("Processing URL:", url);
 
       const steps = [
         { step: "Fetching transcript", status: "processing" },
