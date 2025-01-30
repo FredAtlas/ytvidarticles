@@ -1,14 +1,18 @@
 import ArticleForm from "@/components/article-form";
 import ArticleEditor from "@/components/article-editor";
-import { useGenerateArticle, useSaveArticle } from "@/lib/api";
+import { useGenerateArticle, useSaveArticle, useArticle } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
-import { useLocation } from "wouter";
+import { useLocation, useParams } from "wouter";
 
 export default function Home() {
   const [, setLocation] = useLocation();
+  const { id } = useParams();
   const saveArticle = useSaveArticle();
 
-  const { data: article } = useGenerateArticle({
+  // Fetch existing article if we're in edit mode
+  const { data: existingArticle, isLoading: isLoadingArticle } = useArticle(id);
+
+  const { data: generatedArticle } = useGenerateArticle({
     onSuccess: () => {
       toast({
         title: "Success",
@@ -21,10 +25,10 @@ export default function Home() {
     try {
       await saveArticle.mutateAsync({
         ...editedArticle,
-        youtubeUrl: article?.youtubeUrl,
-        seoScore: article?.seoScore,
-        transcript: article?.transcript,
-        keyTopics: article?.keyTopics,
+        youtubeUrl: (existingArticle || generatedArticle)?.youtubeUrl,
+        seoScore: (existingArticle || generatedArticle)?.seoScore,
+        transcript: (existingArticle || generatedArticle)?.transcript,
+        keyTopics: (existingArticle || generatedArticle)?.keyTopics,
       });
 
       toast({
@@ -39,19 +43,32 @@ export default function Home() {
     }
   };
 
+  // Show loading state while fetching article for edit
+  if (id && isLoadingArticle) {
+    return (
+      <div className="container mx-auto py-8">
+        <h1 className="text-3xl font-bold mb-8">Loading article...</h1>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-8 space-y-8">
-      <h1 className="text-3xl font-bold">Content Generator</h1>
-      <ArticleForm />
-      {article && (
+      <h1 className="text-3xl font-bold">
+        {id ? "Edit Article" : "Content Generator"}
+      </h1>
+
+      {!id && <ArticleForm />}
+
+      {(existingArticle || generatedArticle) && (
         <ArticleEditor
-          content={article.content}
-          titles={article.seoTitles || []}
-          metaDescription={article.metaDescription}
-          tags={article.tags || []}
-          transcript={article.transcript || ""}
-          keyTopics={article.keyTopics || []}
-          missingTopics={article.missingTopics || []}
+          content={existingArticle?.content || generatedArticle?.content}
+          titles={existingArticle?.seoTitles || generatedArticle?.seoTitles || []}
+          metaDescription={existingArticle?.metaDescription || generatedArticle?.metaDescription}
+          tags={existingArticle?.tags || generatedArticle?.tags || []}
+          transcript={existingArticle?.transcript || generatedArticle?.transcript || ""}
+          keyTopics={existingArticle?.keyTopics || generatedArticle?.keyTopics || []}
+          missingTopics={existingArticle?.missingTopics || generatedArticle?.missingTopics || []}
           onSave={handleSave}
         />
       )}
