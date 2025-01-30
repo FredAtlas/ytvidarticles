@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { queryClient } from "./queryClient";
 
 interface GenerateArticleOptions {
   onProgress?: (step: string) => void;
