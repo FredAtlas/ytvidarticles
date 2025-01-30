@@ -4,7 +4,7 @@ import { settings } from "@db/schema";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
-const MAX_CHUNK_SIZE = 8000; // Increased chunk size for better context
+const MAX_CHUNK_SIZE = 4000; // Reduced chunk size to stay within token limits
 
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -31,7 +31,7 @@ async function retryWithDelay<T>(
 }
 
 function splitTranscriptIntoChunks(transcript: string): string[] {
-  // Split by sentences to maintain context
+  // Split by sentences while keeping reasonable chunk sizes
   const sentences = transcript.match(/[^.!?]+[.!?]+/g) || [transcript];
   const chunks: string[] = [];
   let currentChunk = '';
@@ -53,12 +53,11 @@ export async function generateArticle(transcript: string) {
   const openai = getOpenAIClient();
   const settingsData = await db.query.settings.findFirst();
 
-  console.log(`Processing transcript in ${Math.ceil(transcript.length / MAX_CHUNK_SIZE)} chunks`);
-
-  // Split transcript into chunks and process each
+  // Split transcript into chunks
   const chunks = splitTranscriptIntoChunks(transcript);
+  console.log(`Processing transcript in ${chunks.length} chunks`);
 
-  // Step 1: Generate comprehensive summaries for each chunk
+  // Step 1: Generate summaries for each chunk
   console.log("Generating summaries for each chunk...");
   const summaries = await Promise.all(
     chunks.map(async (chunk, index) => {
@@ -69,13 +68,7 @@ export async function generateArticle(transcript: string) {
           messages: [
             {
               role: "system",
-              content: `You are a detailed content analyzer. Create a comprehensive summary of this transcript segment, ensuring to:
-              1. Preserve all important facts, figures, and statistics
-              2. Keep meaningful quotes and key statements
-              3. Maintain the logical flow and connections between ideas
-              4. Include specific examples and case studies mentioned
-              5. Capture any step-by-step instructions or processes
-              Do not summarize too aggressively - retain the depth and richness of the original content.`
+              content: `Summarize this transcript segment while preserving key information, quotes, and statistics.`
             },
             { role: "user", content: chunk }
           ],
@@ -86,83 +79,67 @@ export async function generateArticle(transcript: string) {
     })
   );
 
-  // Step 2: Combine summaries with structure
+  // Step 2: Combine summaries
   console.log("Combining summaries into structured content...");
   const combinedSummary = summaries.join('\n\n');
 
   // Step 3: Generate final article
   console.log("Generating final article...");
+  const response = await retryWithDelay(() =>
+    openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: `Create a well-structured article from this summary following these requirements:
+          1. Include important facts and statistics
+          2. Use clear subheadings
+          3. Maintain logical flow
+          4. Format response as a JSON object with the following structure:
+          {
+            "article": "comprehensive article content",
+            "titles": ["5 SEO optimized titles"],
+            "metaDescription": "155 char meta description",
+            "tags": ["relevant tags"],
+            "primaryKeyword": "main keyword",
+            "seoScore": number
+          }`
+        },
+        {
+          role: "user",
+          content: `Create an article based on this summary:
+          ${settingsData?.editorialGuidelines ? `\nGuidelines: ${settingsData.editorialGuidelines}` : ''}
+          ${settingsData?.writingSamples?.length ? `\nStyle Reference: ${settingsData.writingSamples[0]}` : ''}
+          \nSummary:\n${combinedSummary}`
+        }
+      ],
+      temperature: 0.7,
+    })
+  );
+
+  const content = response.choices[0].message.content;
+  if (!content) {
+    throw new Error("No content received from OpenAI");
+  }
+
   try {
-    const response = await retryWithDelay(() =>
-      openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert content writer. Create a detailed, well-structured article from this summary.
-            Follow these requirements:
-            1. Maintain the depth and comprehensiveness of the original content
-            2. Include all important facts, figures, and statistics
-            3. Preserve meaningful quotes and key statements
-            4. Create a clear, logical structure with proper transitions
-            5. Use subheadings to organize different topics
-            6. Aim for a thorough exploration of the subject matter
+    // Parse and validate response
+    const cleanedContent = content
+      .replace(/```json\s?|\s?```/g, '')
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
 
-            Your response must follow this format exactly:
-            {
-              "article": "your comprehensive article content with proper formatting and structure",
-              "titles": ["title1", "title2", "title3", "title4", "title5"],
-              "metaDescription": "your 155 char meta description",
-              "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-              "primaryKeyword": "main keyword",
-              "seoScore": number
-            }`
-          },
-          {
-            role: "user",
-            content: `Create a comprehensive article based on this summary following any editorial guidelines provided:
-            ${settingsData?.editorialGuidelines ? `\nGuidelines: ${settingsData.editorialGuidelines}` : ''}
-            ${settingsData?.writingSamples?.length ? `\nStyle Reference: ${settingsData.writingSamples[0]}` : ''}
+    const parsedContent = JSON.parse(cleanedContent);
+    const requiredFields = ['article', 'titles', 'metaDescription', 'tags', 'primaryKeyword', 'seoScore'];
+    const missingFields = requiredFields.filter(field => !(field in parsedContent));
 
-            Summary:
-            ${combinedSummary}`
-          }
-        ],
-        temperature: 0.7,
-      })
-    );
-
-    const content = response.choices[0].message.content;
-    if (!content) {
-      throw new Error("No content received from OpenAI");
+    if (missingFields.length > 0) {
+      throw new Error(`Invalid response structure. Missing fields: ${missingFields.join(', ')}`);
     }
 
-    try {
-      // Clean up the response and parse JSON
-      const cleanedContent = content
-        .replace(/```json\s?|\s?```/g, '') // Remove code blocks
-        .replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // Remove control characters
-
-      console.log("Parsing OpenAI response...");
-      const parsedContent = JSON.parse(cleanedContent);
-
-      // Validate the response structure
-      const requiredFields = ['article', 'titles', 'metaDescription', 'tags', 'primaryKeyword', 'seoScore'];
-      const missingFields = requiredFields.filter(field => !(field in parsedContent));
-
-      if (missingFields.length > 0) {
-        throw new Error(`Invalid response structure. Missing fields: ${missingFields.join(', ')}`);
-      }
-
-      return parsedContent;
-    } catch (parseError) {
-      console.error("Failed to parse OpenAI response:", parseError);
-      console.error("Raw response:", content);
-      throw new Error("Failed to parse AI response into required format");
-    }
-  } catch (error: any) {
-    console.error("OpenAI API Error:", error);
-    throw new Error(`Failed to generate article: ${error.message}`);
+    return parsedContent;
+  } catch (error) {
+    console.error("Failed to parse OpenAI response:", error);
+    throw new Error("Failed to generate article in the required format");
   }
 }
 
