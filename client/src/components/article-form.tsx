@@ -31,20 +31,18 @@ export function ArticleForm() {
 
   const generateArticle = useGenerateArticle({
     onProgress: (step: string) => {
-      setSteps(prev => 
-        prev.map(s => {
-          if (s.id === step) {
-            return { ...s, status: "active" };
-          } else if (s.status === "active") {
+      setSteps(prev => {
+        const stepIndex = prev.findIndex(s => s.id === step);
+        return prev.map((s, index) => {
+          if (index < stepIndex) {
             return { ...s, status: "completed" };
+          } else if (index === stepIndex) {
+            return { ...s, status: "active" };
           }
-          return s;
-        })
-      );
-      const newStepIndex = steps.findIndex(s => s.id === step);
-      if (newStepIndex !== -1) {
-        setCurrentStep(newStepIndex);
-      }
+          return { ...s, status: "pending" };
+        });
+      });
+      setCurrentStep(steps.findIndex(s => s.id === step));
     }
   });
 

@@ -30,6 +30,10 @@ export function useGenerateArticle(options: GenerateArticleOptions = {}) {
 
       return data.data;
     },
+    onSuccess: () => {
+      // Invalidate the articles query to trigger a refresh
+      queryClient.invalidateQueries({ queryKey: ["/api/articles"] });
+    },
     onError: (error) => {
       toast({
         title: "Error",
