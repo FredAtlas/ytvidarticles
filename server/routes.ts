@@ -25,20 +25,22 @@ export function registerRoutes(app: Express) {
         { step: "Saving article", status: "waiting" }
       ];
 
-      // Step 1: Get transcript
-      const sendProgress = () => {
-        res.write(`data: ${JSON.stringify({ steps })}\n\n`);
-      };
-
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive'
       });
 
+      const sendProgress = () => {
+        res.write(`data: ${JSON.stringify({ steps })}\n\n`);
+      };
+
+      // Initial progress
       sendProgress();
 
+      console.log("Step 1: Fetching transcript");
       const transcript = await getTranscript(url).catch(error => {
+        console.error("Transcript error:", error);
         steps[0].status = "error";
         sendProgress();
         throw new Error("Could not fetch video transcript. Please check the URL and try again.");
@@ -48,22 +50,21 @@ export function registerRoutes(app: Express) {
       steps[1].status = "processing";
       sendProgress();
 
-      // Step 2: Generate initial article
+      console.log("Step 2: Generating article");
       const openaiResult = await generateArticle(transcript).catch(error => {
+        console.error("OpenAI error:", error);
         steps[1].status = "error";
         sendProgress();
-        if (error.response?.data?.error?.message) {
-          throw new Error(`AI Service Error: ${error.response.data.error.message}`);
-        }
-        throw new Error("Failed to generate article. Please try again later.");
+        throw new Error(error.message || "Failed to generate article. Please try again later.");
       });
 
       steps[1].status = "completed";
       steps[2].status = "processing";
       sendProgress();
 
-      // Step 3: Humanize the content
+      console.log("Step 3: Refining content");
       const humanizedContent = await humanizeContent(openaiResult.article).catch(error => {
+        console.error("Content refinement error:", error);
         steps[2].status = "error";
         sendProgress();
         throw new Error("Failed to refine article content. Please try again later.");
@@ -73,7 +74,7 @@ export function registerRoutes(app: Express) {
       steps[3].status = "processing";
       sendProgress();
 
-      // Step 4: Save to database
+      console.log("Step 4: Saving to database");
       const article = await db.insert(articles).values({
         youtubeUrl: url,
         title: openaiResult.titles[0],
@@ -87,6 +88,8 @@ export function registerRoutes(app: Express) {
       steps[3].status = "completed";
       sendProgress();
 
+      // Send the final article data
+      res.write(`data: ${JSON.stringify({ article: article[0] })}\n\n`);
       res.end();
     } catch (error: any) {
       console.error("Article generation error:", error);

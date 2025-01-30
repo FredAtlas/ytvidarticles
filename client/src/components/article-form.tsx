@@ -3,7 +3,6 @@ import { useForm } from "react-hook-form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useGenerateArticle } from "@/lib/api";
 import { Loader2 } from "lucide-react";
 import { ProgressSteps, type ProgressStep } from "@/components/ui/progress-steps";
 import { ArticleEditor } from "./article-editor";
@@ -35,46 +34,59 @@ export function ArticleForm() {
     setGeneratedArticle(null);
 
     try {
-      const eventSource = new EventSource(`/api/articles?url=${encodeURIComponent(data.url)}`);
+      const response = await fetch("/api/articles", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url: data.url }),
+      });
 
-      eventSource.onmessage = (event) => {
-        const eventData = JSON.parse(event.data);
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("Failed to initialize stream reader");
+      }
 
-        if (eventData.error) {
-          eventSource.close();
-          toast({
-            title: "Error",
-            description: eventData.error,
-            variant: "destructive",
-          });
-          setIsGenerating(false);
-          return;
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const eventData = JSON.parse(line.slice(6));
+
+              if (eventData.error) {
+                toast({
+                  title: "Error",
+                  description: eventData.error,
+                  variant: "destructive",
+                });
+                setIsGenerating(false);
+                return;
+              }
+
+              if (eventData.steps) {
+                setGenerationSteps(eventData.steps.map((step: any) => ({
+                  label: step.step,
+                  status: step.status
+                })));
+              }
+
+              if (eventData.article) {
+                setGeneratedArticle(eventData.article);
+                setIsGenerating(false);
+              }
+            } catch (parseError) {
+              console.error("Failed to parse event data:", parseError);
+            }
+          }
         }
-
-        if (eventData.steps) {
-          setGenerationSteps(eventData.steps.map((step: any) => ({
-            label: step.step,
-            status: step.status
-          })));
-        }
-
-        // Check if all steps are completed
-        const allCompleted = eventData.steps?.every((step: any) => step.status === 'completed');
-        if (allCompleted) {
-          eventSource.close();
-          setIsGenerating(false);
-        }
-      };
-
-      eventSource.onerror = () => {
-        eventSource.close();
-        setIsGenerating(false);
-        toast({
-          title: "Error",
-          description: "Failed to generate article. Please try again.",
-          variant: "destructive",
-        });
-      };
+      }
     } catch (error) {
       setIsGenerating(false);
       toast({
