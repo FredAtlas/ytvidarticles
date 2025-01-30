@@ -7,10 +7,10 @@ import { Stream } from "stream";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
-const MAX_TOKENS_PER_CHUNK = 4000; // Increased from 1000 to handle longer contexts
+const MAX_TOKENS_PER_CHUNK = 3000; // Reduced to account for system message and safety margin
 const CHARS_PER_TOKEN = 4; // Approximate characters per token
 const MAX_CHUNK_SIZE = MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN;
-const CHUNK_OVERLAP = 1000; // Number of tokens to overlap between chunks
+const CHUNK_OVERLAP = 500; // Reduced overlap tokens
 
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -54,12 +54,13 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
     if (line.trim() === '') {
       if (paragraphBuffer) {
         const paragraph = paragraphBuffer.trim();
-        const paragraphTokens = Math.ceil(paragraph.length / CHARS_PER_TOKEN);
+        // Add extra margin in token estimation
+        const paragraphTokens = Math.ceil(paragraph.length / CHARS_PER_TOKEN) + 10;
 
         // If adding this paragraph would exceed our token limit
         if (estimatedTokens + paragraphTokens > MAX_TOKENS_PER_CHUNK) {
           // Keep track of the end of the current chunk for overlap
-          previousChunkEnd = currentChunk.split('\n').slice(-5).join('\n');
+          previousChunkEnd = currentChunk.split('\n').slice(-3).join('\n');
 
           console.log(`Yielding chunk with estimated ${estimatedTokens} tokens`);
           yield currentChunk;
@@ -79,10 +80,10 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
       paragraphBuffer += (paragraphBuffer ? ' ' : '') + line;
     }
 
-    // Force chunk break if we're getting close to the limit
-    if (estimatedTokens > MAX_TOKENS_PER_CHUNK * 0.9) {
-      previousChunkEnd = currentChunk.split('\n').slice(-5).join('\n');
-      console.log(`Forcing chunk break at ${estimatedTokens} tokens (90% of limit)`);
+    // Force chunk break if we're getting close to the limit (80% to be safe)
+    if (estimatedTokens > MAX_TOKENS_PER_CHUNK * 0.8) {
+      previousChunkEnd = currentChunk.split('\n').slice(-3).join('\n');
+      console.log(`Forcing chunk break at ${estimatedTokens} tokens (80% of limit)`);
       yield currentChunk;
       currentChunk = previousChunkEnd + '\n\n';
       estimatedTokens = Math.ceil(previousChunkEnd.length / CHARS_PER_TOKEN);
@@ -92,7 +93,18 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
   // Process any remaining paragraph in the buffer
   if (paragraphBuffer) {
     const paragraph = paragraphBuffer.trim();
-    currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
+    // Check if adding the final paragraph would exceed the limit
+    const finalTokens = Math.ceil(paragraph.length / CHARS_PER_TOKEN) + 10;
+    if (estimatedTokens + finalTokens > MAX_TOKENS_PER_CHUNK) {
+      // Yield current chunk first if it's not empty
+      if (currentChunk) {
+        yield currentChunk;
+      }
+      // Then yield the final paragraph as its own chunk
+      yield paragraph;
+    } else {
+      currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
+    }
   }
 
   // Yield final chunk if there's anything left
@@ -123,12 +135,13 @@ export async function generateArticle(transcriptFilePath: string) {
             messages: [
               {
                 role: "system",
-                content: `Create a concise, coherent summary of this transcript segment, maintaining key details and context.
-                         If this segment continues from a previous part, ensure smooth integration of ideas.`
+                content: `Create a concise summary of this transcript segment. Focus on key points and maintain context.
+                         Length: Keep it under 1000 words.`
               },
               { role: "user", content: chunk }
             ],
             temperature: 0.7,
+            max_tokens: 2000, // Explicitly limit response tokens
           })
         );
 
@@ -139,7 +152,39 @@ export async function generateArticle(transcriptFilePath: string) {
         }
       } catch (error: any) {
         console.error(`Error processing chunk ${chunkCount}:`, error);
-        throw error;
+
+        // If we hit token limit, try splitting the chunk
+        if (error.error?.code === 'context_length_exceeded') {
+          console.log('Token limit exceeded, splitting chunk...');
+          const halfLength = Math.floor(chunk.length / 2);
+          const chunks = [chunk.slice(0, halfLength), chunk.slice(halfLength)];
+
+          for (const subChunk of chunks) {
+            try {
+              const retryResponse = await openai.chat.completions.create({
+                model: "gpt-4",
+                messages: [
+                  {
+                    role: "system",
+                    content: "Create a brief summary of this transcript segment."
+                  },
+                  { role: "user", content: subChunk }
+                ],
+                temperature: 0.7,
+                max_tokens: 1000,
+              });
+
+              if (retryResponse.choices[0].message.content) {
+                summaries.push(retryResponse.choices[0].message.content);
+              }
+            } catch (retryError) {
+              console.error('Failed to process sub-chunk:', retryError);
+              throw new Error('Failed to process transcript chunk even after splitting');
+            }
+          }
+        } else {
+          throw error;
+        }
       }
     }
 
