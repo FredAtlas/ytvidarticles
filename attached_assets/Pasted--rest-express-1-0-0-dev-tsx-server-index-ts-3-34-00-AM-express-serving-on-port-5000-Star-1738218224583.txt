@@ -1,0 +1,41 @@
+
+> rest-express@1.0.0 dev
+> tsx server/index.ts
+
+3:34:00 AM [express] serving on port 5000
+Starting article generation process
+Fetching transcript for URL: https://www.youtube.com/watch?v=tncs0m5pmQg
+Successfully fetched transcript
+Generating article from transcript
+Failed to parse OpenAI response: SyntaxError: Bad control character in string literal in JSON at position 491
+    at JSON.parse (<anonymous>)
+    at generateArticle (/home/runner/workspace/server/services/openai.ts:124:17)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:32:28)
+OpenAI API Error: Error: Invalid response format from AI service
+    at generateArticle (/home/runner/workspace/server/services/openai.ts:128:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:32:28)
+Article generation error: Error: Failed to generate article. Please try again later.
+    at <anonymous> (/home/runner/workspace/server/routes.ts:38:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:32:28)
+3:37:31 AM [express] POST /api/articles 500 in 40611ms :: {"message":"Failed to generate article. Pl…
+Starting article generation process
+Fetching transcript for URL: https://www.youtube.com/watch?v=tncs0m5pmQg
+Successfully fetched transcript
+Generating article from transcript
+Failed to parse OpenAI response: SyntaxError: Bad control character in string literal in JSON at position 404
+    at JSON.parse (<anonymous>)
+    at generateArticle (/home/runner/workspace/server/services/openai.ts:124:17)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:32:28)
+OpenAI API Error: Error: Invalid response format from AI service
+    at generateArticle (/home/runner/workspace/server/services/openai.ts:128:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:32:28)
+Article generation error: Error: Failed to generate article. Please try again later.
+    at <anonymous> (/home/runner/workspace/server/routes.ts:38:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:32:28)
+6:04:42 AM [express] POST /api/articles 500 in 42371ms :: {"message":"Failed to generate article. Pl…

@@ -76,6 +76,7 @@ export async function generateArticle(transcript: string) {
             { role: "user", content: chunk }
           ],
           temperature: 0.7,
+          response_format: { type: "text" },
         })
       );
       return response.choices[0].message.content || '';
@@ -86,33 +87,27 @@ export async function generateArticle(transcript: string) {
   const combinedSummary = summaries.join('\n\n');
 
   // Generate the final article from the combined summary
-  const systemPrompt = `You are an expert content writer. Generate an SEO-optimized article based on the provided summary.
-Your response must be a valid JSON object with the following structure:
-{
-  "article": "the full article content",
-  "titles": ["5 SEO optimized titles"],
-  "metaDescription": "155 character meta description",
-  "tags": ["at least 5 tags including primary keyword"],
-  "primaryKeyword": "the main keyword",
-  "seoScore": number between 0-100
-}`;
-
-  const userPrompt = `Write an article based on this summary:
-${settingsData?.editorialGuidelines ? `\nEditorial Guidelines: ${settingsData.editorialGuidelines}` : ''}
-${settingsData?.writingSamples?.length ? `\nWriting Style Reference: ${settingsData.writingSamples[0]}` : ''}
-
-Summary:
-${combinedSummary}`;
-
   try {
     const response = await retryWithDelay(() =>
       openai.chat.completions.create({
         model: "gpt-4",
         messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
+          {
+            role: "system",
+            content: "Generate an SEO-optimized article based on the provided summary. Return a JSON object."
+          },
+          {
+            role: "user",
+            content: `Write an article based on this summary:
+${settingsData?.editorialGuidelines ? `\nEditorial Guidelines: ${settingsData.editorialGuidelines}` : ''}
+${settingsData?.writingSamples?.length ? `\nWriting Style Reference: ${settingsData.writingSamples[0]}` : ''}
+
+Summary:
+${combinedSummary}`
+          }
         ],
         temperature: 0.7,
+        response_format: { type: "json_object" },
       })
     );
 
@@ -140,10 +135,11 @@ export async function generateTitles(content: string) {
       messages: [
         {
           role: "system",
-          content: "Generate 5 SEO-optimized titles for the article. Format response as: {\"titles\": [\"title1\", \"title2\", \"title3\", \"title4\", \"title5\"]}"
+          content: "Generate 5 SEO-optimized titles for the article."
         },
         { role: "user", content }
-      ]
+      ],
+      response_format: { type: "json_object" },
     })
   );
 
@@ -169,10 +165,11 @@ export async function generateMetaDescription(content: string) {
       messages: [
         {
           role: "system",
-          content: "Generate a compelling 155-character meta description. Format response as: {\"metaDescription\": \"your description here\"}"
+          content: "Generate a compelling 155-character meta description."
         },
         { role: "user", content }
-      ]
+      ],
+      response_format: { type: "json_object" },
     })
   );
 
