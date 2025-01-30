@@ -16,6 +16,7 @@ const getOpenAIClient = () => {
   if (!apiKey) {
     throw new Error("OpenAI API key not configured in environment variables");
   }
+
   return new OpenAI({ apiKey });
 };
 
@@ -177,15 +178,15 @@ export async function generateArticle(transcriptFilePath: string) {
           },
           {
             role: "user",
-            content: `Create a comprehensive article based on these summaries following the editorial guidelines:
-            ${settingsData?.editorialGuidelines ? `\nGuidelines: ${settingsData.editorialGuidelines}` : ''}
-            ${settingsData?.writingSamples?.length ? `\nStyle Reference: ${settingsData.writingSamples[0]}` : ''}
+            content: `Create a comprehensive article based on these transcript summaries:
+${summaries.join('\n\n')}
 
-            Summaries:
-            ${summaries.join('\n\n')}`
+${settingsData?.editorialGuidelines ? `\nUse these editorial guidelines for style and tone: ${settingsData.editorialGuidelines}` : ''}
+${settingsData?.writingSamples?.length ? `\nReference this writing style: ${settingsData.writingSamples[0]}` : ''}`
           }
         ],
         temperature: 0.7,
+        response_format: { type: "json_object" },
       })
     );
 
@@ -195,12 +196,8 @@ export async function generateArticle(transcriptFilePath: string) {
     }
 
     try {
-      const cleanedContent = content
-        .replace(/```json\s?|\s?```/g, '')
-        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
-
       console.log("Parsing OpenAI response...");
-      const parsedContent = JSON.parse(cleanedContent);
+      const parsedContent = JSON.parse(content);
 
       const requiredFields = ['article', 'titles', 'metaDescription', 'tags', 'primaryKeyword', 'seoScore'];
       const missingFields = requiredFields.filter(field => !(field in parsedContent));
