@@ -25,18 +25,19 @@ export function ArticleComparison({
   const [selectedText, setSelectedText] = useState("");
   const [isAdding, setIsAdding] = useState(false);
 
-  // Split transcript into individual sentences
+  // Split transcript into individual sentences with improved sentence detection
   const sentences = transcript
-    .split(/([.!?]\s+)/)
+    .split(/([.!?]+[\s\n]+)/)
     .reduce((acc: string[], part, i, arr) => {
       if (i % 2 === 0 && arr[i + 1]) {
         acc.push(part + arr[i + 1]);
       }
       return acc;
     }, [])
-    .filter(s => s.trim().length > 0);
+    .filter(s => s.trim().length > 0)
+    .map(s => s.trim());
 
-  // Simple and direct coverage detection for each sentence
+  // Strict content coverage detection
   const isSentenceCovered = (sentence: string) => {
     if (!sentence.trim()) return true;
 
@@ -44,14 +45,37 @@ export function ArticleComparison({
     const sentenceLower = sentence.toLowerCase().trim();
     const articleLower = article.toLowerCase();
 
-    // Check if the entire sentence or most of its key phrases are present
+    // 1. Extract meaningful phrases (4+ words)
     const words = sentenceLower.split(/\s+/);
     const keyPhrases = words
-      .slice(0, -2)
-      .map((_, i) => words.slice(i, i + 3).join(' '))
-      .filter(phrase => phrase.split(/\s+/).length >= 3);
+      .slice(0, -3) // Look for 4-word phrases
+      .map((_, i) => words.slice(i, i + 4).join(' '))
+      .filter(phrase => phrase.split(/\s+/).length >= 4);
 
-    return keyPhrases.some(phrase => articleLower.includes(phrase));
+    // 2. Check for exact phrase matches
+    const hasExactPhraseMatch = keyPhrases.some(phrase => 
+      articleLower.includes(phrase)
+    );
+
+    // 3. Check for semantic content coverage
+    const significantWords = words.filter(w => 
+      w.length > 3 && 
+      !['than', 'that', 'this', 'with', 'from', 'have', 'were', 'what'].includes(w)
+    );
+
+    const coveredWords = significantWords.filter(word => {
+      // Look for exact word matches or close variations
+      return articleLower.includes(` ${word} `) || 
+             articleLower.includes(`${word}.`) ||
+             articleLower.includes(`${word},`);
+    });
+
+    // Calculate similarity ratio
+    const similarityRatio = coveredWords.length / significantWords.length;
+
+    // Sentence is considered covered if it has exact phrase matches
+    // AND high word coverage (90%+ of significant words)
+    return hasExactPhraseMatch && similarityRatio > 0.9;
   };
 
   const handleSentenceClick = (sentence: string) => {
