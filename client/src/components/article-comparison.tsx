@@ -24,22 +24,29 @@ export function ArticleComparison({
 }: ArticleComparisonProps) {
   const [selectedText, setSelectedText] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [selectionStart, setSelectionStart] = useState<number | null>(null);
 
-  // Split transcript into semantic sections
-  const paragraphs = transcript.split(/[.!?]\s+(?=[A-Z])/).filter(p => p.trim().length > 0);
+  // Split into more manageable segments (sentences and small paragraphs)
+  const segments = transcript
+    .split(/([.!?]\s+)/)
+    .reduce((acc: string[], part, i, arr) => {
+      // Combine sentence with its punctuation
+      if (i % 2 === 0 && arr[i + 1]) {
+        acc.push(part + arr[i + 1]);
+      } else if (i % 2 === 0) {
+        acc.push(part);
+      }
+      return acc;
+    }, [])
+    .filter(s => s.trim().length > 0);
 
   // Enhanced coverage detection algorithm
-  const isParagraphCovered = useCallback((paragraph: string) => {
-    if (!paragraph.trim()) return true;
+  const isSegmentCovered = useCallback((segment: string) => {
+    if (!segment.trim()) return true;
 
     const dmp = new DiffMatchPatch();
-    const words = paragraph.toLowerCase().split(/\s+/);
+    const words = segment.toLowerCase().split(/\s+/);
     const articleLower = article.toLowerCase();
-
-    // Use more sophisticated coverage detection:
-    // 1. Check for exact phrases (3+ words)
-    // 2. Look for key sentence structures
-    // 3. Consider semantic similarity through key terms
 
     // Check for exact phrases (3+ word sequences)
     const phrases = words.slice(0, -2).map((_, i) => 
@@ -54,20 +61,27 @@ export function ArticleComparison({
     const coveredWords = significantWords.filter(word => articleLower.includes(word));
     const wordCoverageRatio = coveredWords.length / significantWords.length;
 
-    // Consider a paragraph covered if it has matching phrases or high word coverage
     return hasMatchingPhrases || wordCoverageRatio > 0.75;
   }, [article]);
 
-  const handleParagraphClick = (paragraph: string) => {
-    // Expand selection to include context
-    const paragraphIndex = paragraphs.indexOf(paragraph);
+  const handleSegmentClick = (index: number) => {
+    if (selectionStart === null) {
+      // Start new selection
+      setSelectionStart(index);
+      setSelectedText(segments[index]);
+    } else {
+      // Complete selection
+      const start = Math.min(selectionStart, index);
+      const end = Math.max(selectionStart, index);
 
-    // Get surrounding context (one paragraph before and after)
-    const context = paragraphs
-      .slice(Math.max(0, paragraphIndex - 1), Math.min(paragraphs.length, paragraphIndex + 2))
-      .join('\n\n');
+      // Get the selected segments with one segment of context on each side
+      const contextStart = Math.max(0, start - 1);
+      const contextEnd = Math.min(segments.length - 1, end + 1);
 
-    setSelectedText(context);
+      const selectedSegments = segments.slice(contextStart, contextEnd + 1);
+      setSelectedText(selectedSegments.join(' '));
+      setSelectionStart(null);
+    }
   };
 
   const handleAddSection = async () => {
@@ -77,6 +91,7 @@ export function ArticleComparison({
       setIsAdding(true);
       await onAddSection(selectedText);
       setSelectedText("");
+      setSelectionStart(null);
     } catch (error) {
       console.error("Failed to add section:", error);
     } finally {
@@ -85,9 +100,9 @@ export function ArticleComparison({
   };
 
   // Calculate coverage statistics
-  const totalParagraphs = paragraphs.length;
-  const coveredParagraphs = paragraphs.filter(isParagraphCovered).length;
-  const coveragePercentage = Math.round((coveredParagraphs / totalParagraphs) * 100);
+  const totalSegments = segments.length;
+  const coveredSegments = segments.filter(isSegmentCovered).length;
+  const coveragePercentage = Math.round((coveredSegments / totalSegments) * 100);
 
   return (
     <Card>
@@ -118,8 +133,8 @@ export function ArticleComparison({
           <Alert>
             <InfoIcon className="h-4 w-4" />
             <AlertDescription>
-              Coverage: {coveragePercentage}% of content is included in the article. 
-              Click on any red section to add missing content.
+              Coverage: {coveragePercentage}% of content is included in the article.
+              Click segments to select content. Click again to extend selection.
             </AlertDescription>
           </Alert>
 
@@ -127,20 +142,24 @@ export function ArticleComparison({
             <div>
               <h3 className="text-lg font-semibold mb-2">Original Transcript</h3>
               <ScrollArea className="h-[400px] rounded-md border p-4">
-                <div className="space-y-4">
-                  {paragraphs.map((paragraph, index) => {
-                    const isCovered = isParagraphCovered(paragraph);
+                <div className="space-y-2">
+                  {segments.map((segment, index) => {
+                    const isCovered = isSegmentCovered(segment);
+                    const isSelected = selectionStart !== null && 
+                      Math.min(selectionStart, index) >= Math.min(selectionStart, index) && 
+                      Math.max(selectionStart, index) <= Math.max(selectionStart, index);
+
                     return (
                       <div
                         key={index}
                         className={`p-2 rounded cursor-pointer transition-colors ${
-                          selectedText.includes(paragraph) ? "bg-accent" : ""
+                          isSelected || selectedText.includes(segment) ? "bg-accent" : ""
                         } ${
                           isCovered ? "text-muted-foreground" : "text-red-600 hover:bg-red-100/10"
                         }`}
-                        onClick={() => handleParagraphClick(paragraph)}
+                        onClick={() => handleSegmentClick(index)}
                       >
-                        {paragraph}
+                        {segment}
                       </div>
                     );
                   })}
@@ -157,7 +176,7 @@ export function ArticleComparison({
 
           {selectedText && onAddSection && (
             <div className="border rounded-lg p-4 bg-accent/10">
-              <h4 className="font-semibold mb-2">Selected Content (with Context)</h4>
+              <h4 className="font-semibold mb-2">Selected Content</h4>
               <p className="mb-4">{selectedText}</p>
               <Button 
                 onClick={handleAddSection} 
