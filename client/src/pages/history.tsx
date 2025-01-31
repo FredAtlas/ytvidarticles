@@ -12,6 +12,12 @@ import {
 import { useLocation } from "wouter";
 import { ExternalLink, Edit, Search } from "lucide-react";
 
+interface GenerationChunk {
+  originalText: string;
+  summary: string;
+  position: number;
+}
+
 export default function History() {
   const { data: articles, isLoading } = useArticles();
   const [, setLocation] = useLocation();
