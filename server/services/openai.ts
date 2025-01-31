@@ -7,10 +7,10 @@ import { Stream } from "stream";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
-const MAX_TOKENS_PER_CHUNK = 3000; // Reduced to account for system message and safety margin
-const CHARS_PER_TOKEN = 4; // Approximate characters per token
+const MAX_TOKENS_PER_CHUNK = 2500; // Reduced for safety margin
+const CHARS_PER_TOKEN = 4;
 const MAX_CHUNK_SIZE = MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN;
-const CHUNK_OVERLAP = 500; // Reduced overlap tokens
+const CHUNK_OVERLAP = 1000; // Increased overlap for better context
 
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -54,17 +54,17 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
       if (paragraphBuffer) {
         const paragraph = paragraphBuffer.trim();
         // Add extra margin in token estimation
-        const paragraphTokens = Math.ceil(paragraph.length / CHARS_PER_TOKEN) + 10;
+        const paragraphTokens = Math.ceil(paragraph.length / CHARS_PER_TOKEN) + 20; // Increased margin
 
         // If adding this paragraph would exceed our token limit
         if (estimatedTokens + paragraphTokens > MAX_TOKENS_PER_CHUNK) {
           // Keep track of the end of the current chunk for overlap
-          previousChunkEnd = currentChunk.split('\n').slice(-3).join('\n');
+          previousChunkEnd = currentChunk.split('\n').slice(-5).join('\n'); // Increased context window
 
           console.log(`Yielding chunk with estimated ${estimatedTokens} tokens`);
           yield currentChunk;
 
-          // Start new chunk with overlap from previous chunk
+          // Start new chunk with more overlap from previous chunk
           currentChunk = previousChunkEnd + '\n\n' + paragraph;
           estimatedTokens = Math.ceil(previousChunkEnd.length / CHARS_PER_TOKEN) + paragraphTokens;
         } else {
@@ -79,10 +79,10 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
       paragraphBuffer += (paragraphBuffer ? ' ' : '') + line;
     }
 
-    // Force chunk break if we're getting close to the limit (80% to be safe)
-    if (estimatedTokens > MAX_TOKENS_PER_CHUNK * 0.8) {
-      previousChunkEnd = currentChunk.split('\n').slice(-3).join('\n');
-      console.log(`Forcing chunk break at ${estimatedTokens} tokens (80% of limit)`);
+    // Force chunk break if we're getting close to the limit (70% to be safer)
+    if (estimatedTokens > MAX_TOKENS_PER_CHUNK * 0.7) {
+      previousChunkEnd = currentChunk.split('\n').slice(-5).join('\n');
+      console.log(`Forcing chunk break at ${estimatedTokens} tokens (70% of limit)`);
       yield currentChunk;
       currentChunk = previousChunkEnd + '\n\n';
       estimatedTokens = Math.ceil(previousChunkEnd.length / CHARS_PER_TOKEN);
@@ -92,23 +92,12 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
   // Process any remaining paragraph in the buffer
   if (paragraphBuffer) {
     const paragraph = paragraphBuffer.trim();
-    // Check if adding the final paragraph would exceed the limit
-    const finalTokens = Math.ceil(paragraph.length / CHARS_PER_TOKEN) + 10;
-    if (estimatedTokens + finalTokens > MAX_TOKENS_PER_CHUNK) {
-      // Yield current chunk first if it's not empty
-      if (currentChunk) {
-        yield currentChunk;
-      }
-      // Then yield the final paragraph as its own chunk
-      yield paragraph;
+    if (currentChunk) {
+      yield currentChunk + '\n\n' + paragraph;
     } else {
-      currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
+      yield paragraph;
     }
-  }
-
-  // Yield final chunk if there's anything left
-  if (currentChunk) {
-    console.log(`Yielding final chunk with estimated ${estimatedTokens} tokens`);
+  } else if (currentChunk) {
     yield currentChunk;
   }
 }
@@ -121,8 +110,9 @@ export async function generateArticle(transcriptFilePath: string) {
     console.log("Processing transcript file in chunks...");
     const summaries: string[] = [];
     let chunkCount = 0;
+    let previousSummaryEnd = '';
 
-    // Process file in chunks
+    // Process file in chunks with improved context handling
     for await (const chunk of readFileInChunks(transcriptFilePath)) {
       chunkCount++;
       console.log(`Processing chunk ${chunkCount}, approximate size: ${chunk.length} characters`);
@@ -134,9 +124,11 @@ export async function generateArticle(transcriptFilePath: string) {
             messages: [
               {
                 role: "system",
-                content: `Create a concise summary of this transcript segment. Focus on key points and maintain context.
-                         Length: Keep it under 1000 words.
-                         Also identify key topics and concepts discussed in this segment.`
+                content: `Create a detailed summary of this transcript segment, ensuring no important information is lost.
+                         If this is not the first chunk, incorporate it seamlessly with: ${previousSummaryEnd}
+                         Focus on maintaining narrative flow and context.
+                         Length: Keep it under 1000 words while preserving all key information.
+                         Also identify any key topics and concepts discussed in this segment.`
               },
               { role: "user", content: chunk }
             ],
@@ -147,6 +139,8 @@ export async function generateArticle(transcriptFilePath: string) {
 
         const summary = response.choices[0].message.content;
         if (summary) {
+          // Keep track of the end of this summary for context in next chunk
+          previousSummaryEnd = summary.split('\n').slice(-3).join('\n');
           summaries.push(summary);
           console.log(`Successfully processed chunk ${chunkCount}`);
         }
@@ -219,10 +213,10 @@ export async function generateArticle(transcriptFilePath: string) {
           {
             role: "user",
             content: `Create a comprehensive article based on these transcript summaries:
-${summaries.join('\n\n')}
+        ${summaries.join('\n\n')}
 
-${settingsData?.editorialGuidelines ? `\nUse these editorial guidelines for style and tone: ${settingsData.editorialGuidelines}` : ''}
-${settingsData?.writingSamples?.length ? `\nReference this writing style: ${settingsData.writingSamples[0]}` : ''}`
+        ${settingsData?.editorialGuidelines ? `\nUse these editorial guidelines for style and tone: ${settingsData.editorialGuidelines}` : ''}
+        ${settingsData?.writingSamples?.length ? `\nReference this writing style: ${settingsData.writingSamples[0]}` : ''}`
           }
         ],
         temperature: 0.7,
@@ -240,7 +234,7 @@ ${settingsData?.writingSamples?.length ? `\nReference this writing style: ${sett
       const parsedContent = JSON.parse(content);
 
       const requiredFields = [
-        'article', 'titles', 'metaDescription', 'tags', 
+        'article', 'titles', 'metaDescription', 'tags',
         'keyTopics', 'missingTopics', 'seoScore'
       ];
       const missingFields = requiredFields.filter(field => !(field in parsedContent));

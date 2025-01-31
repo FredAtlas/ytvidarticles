@@ -213,7 +213,7 @@ export function registerRoutes(app: Express) {
     }
   });
 
-  // Add content integration endpoint
+  // Enhanced content integration endpoint
   app.post("/api/articles/integrate", async (req, res) => {
     try {
       const { existingContent, newSection } = req.body;
@@ -222,7 +222,15 @@ export function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Missing required content" });
       }
 
-      const integratedContent = await integrateContent(existingContent, newSection);
+      // Get settings for context
+      const settingsData = await db.query.settings.findFirst();
+
+      // Call enhanced content integration
+      const integratedContent = await integrateContent(
+        existingContent, 
+        newSection,
+        settingsData?.editorialGuidelines
+      );
 
       res.status(200).json({
         status: "success",

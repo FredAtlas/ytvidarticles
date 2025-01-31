@@ -25,10 +25,10 @@ export function ArticleComparison({
   const [selectedText, setSelectedText] = useState("");
   const [isAdding, setIsAdding] = useState(false);
 
-  // Split transcript into paragraphs for easier selection
-  const paragraphs = transcript.split(/\n\n+/);
+  // Split transcript into semantic sections
+  const paragraphs = transcript.split(/[.!?]\s+(?=[A-Z])/).filter(p => p.trim().length > 0);
 
-  // Function to check if a paragraph is covered in the article
+  // Enhanced coverage detection algorithm
   const isParagraphCovered = useCallback((paragraph: string) => {
     if (!paragraph.trim()) return true;
 
@@ -36,14 +36,38 @@ export function ArticleComparison({
     const words = paragraph.toLowerCase().split(/\s+/);
     const articleLower = article.toLowerCase();
 
-    // Consider a paragraph covered if more than 60% of its significant words appear in the article
+    // Use more sophisticated coverage detection:
+    // 1. Check for exact phrases (3+ words)
+    // 2. Look for key sentence structures
+    // 3. Consider semantic similarity through key terms
+
+    // Check for exact phrases (3+ word sequences)
+    const phrases = words.slice(0, -2).map((_, i) => 
+      words.slice(i, i + 3).join(' ')
+    );
+    const hasMatchingPhrases = phrases.some(phrase => 
+      articleLower.includes(phrase) && phrase.split(/\s+/).length >= 3
+    );
+
+    // Check for key terms coverage
     const significantWords = words.filter(w => w.length > 3);
     const coveredWords = significantWords.filter(word => articleLower.includes(word));
-    return coveredWords.length / significantWords.length > 0.6;
+    const wordCoverageRatio = coveredWords.length / significantWords.length;
+
+    // Consider a paragraph covered if it has matching phrases or high word coverage
+    return hasMatchingPhrases || wordCoverageRatio > 0.75;
   }, [article]);
 
   const handleParagraphClick = (paragraph: string) => {
-    setSelectedText(paragraph);
+    // Expand selection to include context
+    const paragraphIndex = paragraphs.indexOf(paragraph);
+
+    // Get surrounding context (one paragraph before and after)
+    const context = paragraphs
+      .slice(Math.max(0, paragraphIndex - 1), Math.min(paragraphs.length, paragraphIndex + 2))
+      .join('\n\n');
+
+    setSelectedText(context);
   };
 
   const handleAddSection = async () => {
@@ -59,6 +83,11 @@ export function ArticleComparison({
       setIsAdding(false);
     }
   };
+
+  // Calculate coverage statistics
+  const totalParagraphs = paragraphs.length;
+  const coveredParagraphs = paragraphs.filter(isParagraphCovered).length;
+  const coveragePercentage = Math.round((coveredParagraphs / totalParagraphs) * 100);
 
   return (
     <Card>
@@ -89,8 +118,8 @@ export function ArticleComparison({
           <Alert>
             <InfoIcon className="h-4 w-4" />
             <AlertDescription>
-              Click on any uncovered section in the transcript to add it to your article. 
-              Red sections indicate content not yet covered in the article.
+              Coverage: {coveragePercentage}% of content is included in the article. 
+              Click on any red section to add missing content.
             </AlertDescription>
           </Alert>
 
@@ -105,7 +134,7 @@ export function ArticleComparison({
                       <div
                         key={index}
                         className={`p-2 rounded cursor-pointer transition-colors ${
-                          selectedText === paragraph ? "bg-accent" : ""
+                          selectedText.includes(paragraph) ? "bg-accent" : ""
                         } ${
                           isCovered ? "text-muted-foreground" : "text-red-600 hover:bg-red-100/10"
                         }`}
@@ -128,13 +157,13 @@ export function ArticleComparison({
 
           {selectedText && onAddSection && (
             <div className="border rounded-lg p-4 bg-accent/10">
-              <h4 className="font-semibold mb-2">Selected Content</h4>
+              <h4 className="font-semibold mb-2">Selected Content (with Context)</h4>
               <p className="mb-4">{selectedText}</p>
               <Button 
                 onClick={handleAddSection} 
                 disabled={isAdding}
               >
-                {isAdding ? "Adding to Article..." : "Add to Article"}
+                {isAdding ? "Adding to Article..." : "Add Selected Content"}
               </Button>
             </div>
           )}
