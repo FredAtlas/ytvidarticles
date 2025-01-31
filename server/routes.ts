@@ -36,7 +36,6 @@ export function registerRoutes(app: Express) {
     }
   });
 
-  // Article generation
   app.post("/api/articles", async (req, res) => {
     try {
       console.log("Starting article generation process");
@@ -80,7 +79,7 @@ export function registerRoutes(app: Express) {
       });
       console.log("Successfully humanized content");
 
-      // Step 4: Save to database with transcript and topics
+      // Step 4: Save to database with all information
       console.log("Saving article to database");
       const article = await db.insert(articles).values({
         youtubeUrl: url,
@@ -93,6 +92,7 @@ export function registerRoutes(app: Express) {
         seoScore: openaiResult.seoScore,
         keyTopics: openaiResult.keyTopics || [],
         missingTopics: openaiResult.missingTopics || [],
+        generationChunks: openaiResult.generationChunks || [],
         createdAt: new Date(),
         updatedAt: new Date(),
       }).returning();

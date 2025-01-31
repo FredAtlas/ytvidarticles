@@ -102,13 +102,31 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
   }
 }
 
-export async function generateArticle(transcriptFilePath: string) {
+interface GenerationChunk {
+  originalText: string;
+  summary: string;
+  position: number;
+}
+
+export interface GenerationResult {
+  article: string;
+  titles: string[];
+  metaDescription: string;
+  tags: string[];
+  keyTopics: string[];
+  missingTopics: string[];
+  seoScore: number;
+  generationChunks: GenerationChunk[];
+}
+
+export async function generateArticle(transcriptFilePath: string): Promise<GenerationResult> {
   const openai = getOpenAIClient();
   const settingsData = await db.query.settings.findFirst();
 
   try {
     console.log("Processing transcript file in chunks...");
     const summaries: string[] = [];
+    const generationChunks: GenerationChunk[] = [];
     let chunkCount = 0;
     let previousSummaryEnd = '';
 
@@ -142,47 +160,23 @@ export async function generateArticle(transcriptFilePath: string) {
           // Keep track of the end of this summary for context in next chunk
           previousSummaryEnd = summary.split('\n').slice(-3).join('\n');
           summaries.push(summary);
+
+          // Store chunk information
+          generationChunks.push({
+            originalText: chunk,
+            summary: summary,
+            position: chunkCount - 1
+          });
+
           console.log(`Successfully processed chunk ${chunkCount}`);
         }
       } catch (error: any) {
         console.error(`Error processing chunk ${chunkCount}:`, error);
-
-        // If we hit token limit, try splitting the chunk
-        if (error.error?.code === 'context_length_exceeded') {
-          console.log('Token limit exceeded, splitting chunk...');
-          const halfLength = Math.floor(chunk.length / 2);
-          const chunks = [chunk.slice(0, halfLength), chunk.slice(halfLength)];
-
-          for (const subChunk of chunks) {
-            try {
-              const retryResponse = await openai.chat.completions.create({
-                model: "gpt-4",
-                messages: [
-                  {
-                    role: "system",
-                    content: "Create a brief summary of this transcript segment."
-                  },
-                  { role: "user", content: subChunk }
-                ],
-                temperature: 0.7,
-                max_tokens: 1000,
-              });
-
-              if (retryResponse.choices[0].message.content) {
-                summaries.push(retryResponse.choices[0].message.content);
-              }
-            } catch (retryError) {
-              console.error('Failed to process sub-chunk:', retryError);
-              throw new Error('Failed to process transcript chunk even after splitting');
-            }
-          }
-        } else {
-          throw error;
-        }
+        throw error;
       }
     }
 
-    console.log(`Successfully processed ${chunkCount} chunks. Analyzing content coverage...`);
+    console.log(`Successfully processed ${chunkCount} chunks. Generating final article...`);
 
     // Generate final article with all the content
     const response = await retryWithDelay(() =>
@@ -213,10 +207,10 @@ export async function generateArticle(transcriptFilePath: string) {
           {
             role: "user",
             content: `Create a comprehensive article based on these transcript summaries:
-        ${summaries.join('\n\n')}
+            ${summaries.join('\n\n')}
 
-        ${settingsData?.editorialGuidelines ? `\nUse these editorial guidelines for style and tone: ${settingsData.editorialGuidelines}` : ''}
-        ${settingsData?.writingSamples?.length ? `\nReference this writing style: ${settingsData.writingSamples[0]}` : ''}`
+            ${settingsData?.editorialGuidelines ? `\nUse these editorial guidelines for style and tone: ${settingsData.editorialGuidelines}` : ''}
+            ${settingsData?.writingSamples?.length ? `\nReference this writing style: ${settingsData.writingSamples[0]}` : ''}`
           }
         ],
         temperature: 0.7,
@@ -237,13 +231,16 @@ export async function generateArticle(transcriptFilePath: string) {
         'article', 'titles', 'metaDescription', 'tags',
         'keyTopics', 'missingTopics', 'seoScore'
       ];
-      const missingFields = requiredFields.filter(field => !(field in parsedContent));
 
+      const missingFields = requiredFields.filter(field => !(field in parsedContent));
       if (missingFields.length > 0) {
         throw new Error(`Invalid response structure. Missing fields: ${missingFields.join(', ')}`);
       }
 
-      return parsedContent;
+      return {
+        ...parsedContent,
+        generationChunks
+      };
     } catch (parseError) {
       console.error("Failed to parse OpenAI response:", parseError);
       console.error("Raw response:", content);
