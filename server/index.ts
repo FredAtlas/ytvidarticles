@@ -37,7 +37,7 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
+const startServer = async (port: number): Promise<void> => {
   try {
     const server = registerRoutes(app);
 
@@ -56,15 +56,33 @@ app.use((req, res, next) => {
       serveStatic(app);
     }
 
-    // Always use port 5000 and bind to 0.0.0.0
-    const PORT = process.env.PORT || 5000;
     const HOST = "0.0.0.0";
 
-    server.listen(PORT, HOST, () => {
-      log(`Server running at http://${HOST}:${PORT}`);
+    return new Promise((resolve, reject) => {
+      server.listen(port, HOST)
+        .once('listening', () => {
+          log(`Server running at http://${HOST}:${port}`);
+          resolve();
+        })
+        .once('error', (err: any) => {
+          if (err.code === 'EADDRINUSE') {
+            log(`Port ${port} is busy, trying next port`);
+            server.close();
+            startServer(port + 1).then(resolve).catch(reject);
+          } else {
+            reject(err);
+          }
+        });
     });
   } catch (error) {
     console.error("Failed to start server:", error);
-    process.exit(1);
+    throw error;
   }
-})();
+};
+
+// Start with initial port 5000
+const initialPort = process.env.PORT ? parseInt(process.env.PORT) : 5000;
+startServer(initialPort).catch((error) => {
+  console.error("Failed to start server:", error);
+  process.exit(1);
+});
