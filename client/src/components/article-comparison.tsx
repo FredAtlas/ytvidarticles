@@ -52,6 +52,9 @@ export function ArticleComparison({
     }
   };
 
+  // Debug logging to check if chunks are being received
+  console.log("Generation chunks received:", generationChunks);
+
   return (
     <Card>
       <CardHeader>
@@ -110,29 +113,35 @@ export function ArticleComparison({
             </TabsContent>
 
             <TabsContent value="chunks" className="mt-4">
-              <div className="space-y-4">
-                {generationChunks.map((chunk, index) => (
-                  <Card key={index} className="p-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <h4 className="font-semibold mb-2">Original Chunk {index + 1}</h4>
-                        <div 
-                          className="p-2 rounded border cursor-pointer hover:bg-accent/10"
-                          onClick={() => handleSentenceClick(chunk.originalText)}
-                        >
-                          {chunk.originalText}
+              {generationChunks && generationChunks.length > 0 ? (
+                <div className="space-y-4">
+                  {generationChunks.map((chunk, index) => (
+                    <Card key={index} className="p-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <h4 className="font-semibold mb-2">Original Chunk {index + 1}</h4>
+                          <div 
+                            className="p-2 rounded border cursor-pointer hover:bg-accent/10"
+                            onClick={() => handleSentenceClick(chunk.originalText)}
+                          >
+                            {chunk.originalText}
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="font-semibold mb-2">Generated Summary</h4>
+                          <div className="p-2 rounded border bg-muted/50">
+                            {chunk.summary}
+                          </div>
                         </div>
                       </div>
-                      <div>
-                        <h4 className="font-semibold mb-2">Generated Summary</h4>
-                        <div className="p-2 rounded border bg-muted/50">
-                          {chunk.summary}
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center p-4 text-muted-foreground">
+                  No chunk analysis available for this article. This may occur for articles generated before the chunk analysis feature was added.
+                </div>
+              )}
             </TabsContent>
           </Tabs>
 
