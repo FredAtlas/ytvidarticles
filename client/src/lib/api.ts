@@ -2,6 +2,29 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { queryClient } from "./queryClient";
 
+interface GenerationChunk {
+  originalText: string;
+  summary: string;
+  position: number;
+}
+
+interface Article {
+  id: number;
+  youtubeUrl: string;
+  title: string;
+  content: string;
+  transcript: string;
+  metaDescription: string;
+  seoTitles: string[];
+  tags: string[];
+  seoScore: number;
+  keyTopics: string[];
+  missingTopics: string[];
+  generationChunks: GenerationChunk[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 interface GenerateArticleOptions {
   onProgress?: (step: string) => void;
   onSuccess?: () => void;
@@ -16,7 +39,8 @@ export function useArticle(id?: string) {
       if (!res.ok) {
         throw new Error("Failed to fetch article");
       }
-      return res.json();
+      const data = await res.json();
+      return data as Article;
     },
     enabled: !!id,
   });
@@ -47,7 +71,7 @@ export function useGenerateArticle(options: GenerateArticleOptions = {}) {
         options.onProgress?.("refinement");
         options.onProgress?.("completion");
 
-        return data.data;
+        return data.data as Article;
       } catch (error: any) {
         console.error("Article generation error:", error);
         throw error;
@@ -76,7 +100,7 @@ export function useGenerateArticle(options: GenerateArticleOptions = {}) {
 
 export function useSaveArticle() {
   return useMutation({
-    mutationFn: async (articleData: any) => {
+    mutationFn: async (articleData: Partial<Article>) => {
       const res = await fetch("/api/articles/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,7 +111,7 @@ export function useSaveArticle() {
         throw new Error(await res.text());
       }
 
-      return res.json();
+      return res.json() as Promise<Article>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/articles"] });
@@ -110,7 +134,7 @@ export function useArticles() {
       if (!res.ok) {
         throw new Error("Failed to fetch articles");
       }
-      return res.json();
+      return res.json() as Promise<Article[]>;
     }
   });
 }

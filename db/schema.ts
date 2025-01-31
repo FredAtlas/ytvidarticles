@@ -13,6 +13,11 @@ export const articles = pgTable("articles", {
   seoScore: integer("seo_score").notNull(),
   keyTopics: jsonb("key_topics").notNull().default(['']).$type<string[]>(),
   missingTopics: jsonb("missing_topics").default(['']).$type<string[]>(),
+  generationChunks: jsonb("generation_chunks").default([]).$type<Array<{
+    originalText: string;
+    summary: string;
+    position: number;
+  }>>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

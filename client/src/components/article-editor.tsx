@@ -9,6 +9,12 @@ import { ArticleComparison } from "./article-comparison";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 
+interface GenerationChunk {
+  originalText: string;
+  summary: string;
+  position: number;
+}
+
 interface ArticleEditorProps {
   content: string;
   titles: string[];
@@ -17,6 +23,7 @@ interface ArticleEditorProps {
   transcript?: string;
   keyTopics?: string[];
   missingTopics?: string[];
+  generationChunks?: GenerationChunk[];
   onSave: (data: { content: string; title: string; metaDescription: string; tags: string[] }) => void;
 }
 
@@ -28,6 +35,7 @@ export default function ArticleEditor({
   transcript = "",
   keyTopics = [],
   missingTopics = [],
+  generationChunks = [],
   onSave
 }: ArticleEditorProps) {
   const [editedContent, setEditedContent] = useState(content);
@@ -173,6 +181,7 @@ export default function ArticleEditor({
                 transcript={transcript}
                 keyTopics={keyTopics}
                 missingTopics={missingTopics}
+                generationChunks={generationChunks}
                 onAddSection={handleAddSection}
               />
             </TabsContent>
