@@ -27,6 +27,13 @@ export default function Analysis() {
     );
   }
 
+  // Debug logging to check chunks data
+  console.log("Article data received:", {
+    hasChunks: Boolean(article.generationChunks),
+    chunkCount: article.generationChunks?.length,
+    firstChunk: article.generationChunks?.[0]
+  });
+
   return (
     <div className="container mx-auto py-8 space-y-8">
       <div className="flex items-center gap-4">
@@ -44,6 +51,7 @@ export default function Analysis() {
         transcript={article.transcript || ""}
         keyTopics={article.keyTopics || []}
         missingTopics={article.missingTopics || []}
+        generationChunks={article.generationChunks || []}
       />
     </div>
   );
