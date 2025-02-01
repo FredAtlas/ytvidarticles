@@ -34,6 +34,13 @@ export function ArticleComparison({
   const [isAdding, setIsAdding] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("full");
 
+  // Enhanced debugging to check chunk data
+  console.log("ArticleComparison received chunks:", {
+    chunkCount: generationChunks?.length || 0,
+    firstChunk: generationChunks?.[0],
+    hasChunks: Boolean(generationChunks?.length)
+  });
+
   const handleSentenceClick = (text: string) => {
     setSelectedText(text);
   };

@@ -79,6 +79,9 @@ export function registerRoutes(app: Express) {
       });
       console.log("Successfully humanized content");
 
+      // Log generation chunks for debugging
+      console.log("Generation chunks:", JSON.stringify(openaiResult.generationChunks, null, 2));
+
       // Step 4: Save to database with all information
       console.log("Saving article to database");
       const article = await db.insert(articles).values({
@@ -92,11 +95,16 @@ export function registerRoutes(app: Express) {
         seoScore: openaiResult.seoScore,
         keyTopics: openaiResult.keyTopics || [],
         missingTopics: openaiResult.missingTopics || [],
-        generationChunks: openaiResult.generationChunks || [],
+        generationChunks: openaiResult.generationChunks || [], // Ensure chunks are saved
         createdAt: new Date(),
         updatedAt: new Date(),
       }).returning();
-      console.log("Successfully saved article to database");
+
+      // Log saved article for verification
+      console.log("Article saved with chunks:", JSON.stringify({
+        id: article[0].id,
+        chunkCount: article[0].generationChunks?.length || 0
+      }, null, 2));
 
       res.status(200).json({
         status: "success",
