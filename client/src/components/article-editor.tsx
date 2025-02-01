@@ -44,6 +44,12 @@ export default function ArticleEditor({
   const [editedTags, setEditedTags] = useState(tags);
   const { toast } = useToast();
 
+  // Debug logging for chunks
+  console.log("ArticleEditor received chunks:", {
+    count: generationChunks?.length,
+    chunks: generationChunks
+  });
+
   const handleAddSection = async (section: string) => {
     try {
       const response = await fetch("/api/articles/integrate", {
