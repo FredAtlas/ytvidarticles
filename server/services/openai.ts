@@ -6,11 +6,59 @@ import readline from "readline";
 import { Stream } from "stream";
 
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second
-const MAX_TOKENS_PER_CHUNK = 1500; // Reduced for safety margin
+const RETRY_DELAY = 1000;
+const BASE_TOKENS_PER_CHUNK = 1500;
 const CHARS_PER_TOKEN = 4;
-const MAX_CHUNK_SIZE = MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN;
-const CHUNK_OVERLAP = 500; // Balanced overlap for context
+const MIN_CHUNK_SIZE = 800;
+const MAX_CHUNK_SIZE = 2000;
+const CHUNK_OVERLAP = 500;
+
+interface ComplexityMetrics {
+  averageSentenceLength: number;
+  technicalTermsRatio: number;
+  specialCharRatio: number;
+  complexityScore: number;
+}
+
+function analyzeTextComplexity(text: string): ComplexityMetrics {
+  // Split into sentences (basic implementation)
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  const words = text.split(/\s+/).filter(w => w.length > 0);
+
+  // Calculate average sentence length
+  const averageSentenceLength = words.length / sentences.length;
+
+  // Count technical terms (simplified - words longer than 8 chars)
+  const technicalTerms = words.filter(w => w.length > 8).length;
+  const technicalTermsRatio = technicalTerms / words.length;
+
+  // Count special characters
+  const specialChars = text.replace(/[a-zA-Z0-9\s]/g, '').length;
+  const specialCharRatio = specialChars / text.length;
+
+  // Calculate overall complexity score (0-1)
+  const complexityScore = (
+    (Math.min(averageSentenceLength / 30, 1) * 0.4) +
+    (technicalTermsRatio * 0.4) +
+    (specialCharRatio * 0.2)
+  );
+
+  return {
+    averageSentenceLength,
+    technicalTermsRatio,
+    specialCharRatio,
+    complexityScore
+  };
+}
+
+function getAdaptiveChunkSize(complexity: number): number {
+  // Adjust chunk size inversely to complexity
+  const adaptiveSize = BASE_TOKENS_PER_CHUNK * (1 - (complexity * 0.5));
+  return Math.max(
+    MIN_CHUNK_SIZE,
+    Math.min(MAX_CHUNK_SIZE, Math.round(adaptiveSize))
+  );
+}
 
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -47,27 +95,33 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
   let previousChunkEnd = '';
   let estimatedTokens = 0;
   let paragraphBuffer = '';
+  let complexityMetrics: ComplexityMetrics | null = null;
 
   for await (const line of rl) {
-    // Add line to paragraph buffer until we hit a blank line or paragraph break
+    // Analyze complexity after gathering some content
+    if (!complexityMetrics && paragraphBuffer.length > 1000) {
+      complexityMetrics = analyzeTextComplexity(paragraphBuffer);
+      console.log("Content complexity analysis:", complexityMetrics);
+    }
+
+    // Determine chunk size based on complexity
+    const currentMaxTokens = complexityMetrics
+      ? getAdaptiveChunkSize(complexityMetrics.complexityScore)
+      : BASE_TOKENS_PER_CHUNK;
+
     if (line.trim() === '') {
       if (paragraphBuffer) {
         const paragraph = paragraphBuffer.trim();
         const paragraphTokens = Math.ceil(paragraph.length / CHARS_PER_TOKEN) + 10;
 
-        // If adding this paragraph would exceed our token limit
-        if (estimatedTokens + paragraphTokens > MAX_TOKENS_PER_CHUNK) {
-          // Keep track of the end of the current chunk for overlap
+        if (estimatedTokens + paragraphTokens > currentMaxTokens) {
           previousChunkEnd = currentChunk.split('\n').slice(-3).join('\n');
-
-          console.log(`Yielding chunk with estimated ${estimatedTokens} tokens`);
+          console.log(`Yielding chunk with ${estimatedTokens} tokens (max: ${currentMaxTokens})`);
           yield currentChunk;
 
-          // Start new chunk with overlap from previous chunk
           currentChunk = previousChunkEnd + '\n\n' + paragraph;
           estimatedTokens = Math.ceil(previousChunkEnd.length / CHARS_PER_TOKEN) + paragraphTokens;
         } else {
-          // Add paragraph to current chunk
           currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
           estimatedTokens += paragraphTokens;
         }
@@ -78,23 +132,20 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
       paragraphBuffer += (paragraphBuffer ? ' ' : '') + line;
     }
 
-    // Force chunk break if we're getting close to the limit
-    if (estimatedTokens > MAX_TOKENS_PER_CHUNK * 0.7) {
+    if (estimatedTokens > currentMaxTokens * 0.7) {
       previousChunkEnd = currentChunk.split('\n').slice(-3).join('\n');
-      console.log(`Forcing chunk break at ${estimatedTokens} tokens (70% of limit)`);
+      console.log(`Forcing chunk break at ${estimatedTokens} tokens (70% of ${currentMaxTokens})`);
       yield currentChunk;
       currentChunk = previousChunkEnd + '\n\n';
       estimatedTokens = Math.ceil(previousChunkEnd.length / CHARS_PER_TOKEN);
     }
   }
 
-  // Process any remaining paragraph in the buffer
   if (paragraphBuffer) {
     const paragraph = paragraphBuffer.trim();
     currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
   }
 
-  // Yield final chunk if not empty
   if (currentChunk.trim()) {
     yield currentChunk;
   }
@@ -273,40 +324,9 @@ export async function generateTitles(content: string) {
   }
 
   try {
-    const cleanedContent = responseContent.replace(/```json\n?|\n?```/g, '');
-    return JSON.parse(cleanedContent);
+    return JSON.parse(responseContent).titles;
   } catch (error) {
     console.error("Failed to parse OpenAI response for titles:", error);
     throw new Error("Invalid title format from AI service");
-  }
-}
-
-export async function generateMetaDescription(content: string) {
-  const openai = getOpenAIClient();
-
-  const response = await retryWithDelay(() =>
-    openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: "Generate a compelling 155-character meta description. Format your response as a JSON object with a 'metaDescription' field."
-        },
-        { role: "user", content }
-      ],
-    })
-  );
-
-  const responseContent = response.choices[0].message.content;
-  if (!responseContent) {
-    throw new Error("No content received from OpenAI");
-  }
-
-  try {
-    const cleanedContent = responseContent.replace(/```json\n?|\n?```/g, '');
-    return JSON.parse(cleanedContent).metaDescription;
-  } catch (error) {
-    console.error("Failed to parse OpenAI response for meta description:", error);
-    throw new Error("Invalid meta description format from AI service");
   }
 }
