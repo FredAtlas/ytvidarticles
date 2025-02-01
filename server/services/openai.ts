@@ -7,11 +7,11 @@ import { Stream } from "stream";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
-const BASE_TOKENS_PER_CHUNK = 1500;
+const BASE_TOKENS_PER_CHUNK = 300;
 const CHARS_PER_TOKEN = 4;
-const MIN_CHUNK_SIZE = 800;
-const MAX_CHUNK_SIZE = 2000;
-const CHUNK_OVERLAP = 500;
+const MIN_CHUNK_SIZE = 200;
+const MAX_CHUNK_SIZE = 400;
+const CHUNK_OVERLAP = 100;
 
 interface ComplexityMetrics {
   averageSentenceLength: number;
@@ -96,10 +96,11 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
   let estimatedTokens = 0;
   let paragraphBuffer = '';
   let complexityMetrics: ComplexityMetrics | null = null;
+  let wordCount = 0;
 
   for await (const line of rl) {
     // Analyze complexity after gathering some content
-    if (!complexityMetrics && paragraphBuffer.length > 1000) {
+    if (!complexityMetrics && paragraphBuffer.length > 500) {
       complexityMetrics = analyzeTextComplexity(paragraphBuffer);
       console.log("Content complexity analysis:", complexityMetrics);
     }
@@ -112,18 +113,21 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
     if (line.trim() === '') {
       if (paragraphBuffer) {
         const paragraph = paragraphBuffer.trim();
-        const paragraphTokens = Math.ceil(paragraph.length / CHARS_PER_TOKEN) + 10;
+        const paragraphTokens = Math.ceil(paragraph.length / CHARS_PER_TOKEN);
+        const paragraphWords = paragraph.split(/\s+/).length;
 
-        if (estimatedTokens + paragraphTokens > currentMaxTokens) {
-          previousChunkEnd = currentChunk.split('\n').slice(-3).join('\n');
-          console.log(`Yielding chunk with ${estimatedTokens} tokens (max: ${currentMaxTokens})`);
+        if (wordCount + paragraphWords > 300 || estimatedTokens + paragraphTokens > currentMaxTokens) {
+          previousChunkEnd = currentChunk.split('\n').slice(-2).join('\n');
+          console.log(`Yielding chunk with ${wordCount} words (${estimatedTokens} tokens)`);
           yield currentChunk;
 
           currentChunk = previousChunkEnd + '\n\n' + paragraph;
           estimatedTokens = Math.ceil(previousChunkEnd.length / CHARS_PER_TOKEN) + paragraphTokens;
+          wordCount = previousChunkEnd.split(/\s+/).length + paragraph.split(/\s+/).length;
         } else {
           currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
           estimatedTokens += paragraphTokens;
+          wordCount += paragraphWords;
         }
 
         paragraphBuffer = '';
@@ -132,12 +136,14 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
       paragraphBuffer += (paragraphBuffer ? ' ' : '') + line;
     }
 
-    if (estimatedTokens > currentMaxTokens * 0.7) {
-      previousChunkEnd = currentChunk.split('\n').slice(-3).join('\n');
-      console.log(`Forcing chunk break at ${estimatedTokens} tokens (70% of ${currentMaxTokens})`);
+    // Force chunk break if we exceed the target size
+    if (wordCount > 300 || estimatedTokens > currentMaxTokens * 0.7) {
+      previousChunkEnd = currentChunk.split('\n').slice(-2).join('\n');
+      console.log(`Forcing chunk break at ${wordCount} words (${estimatedTokens} tokens)`);
       yield currentChunk;
       currentChunk = previousChunkEnd + '\n\n';
       estimatedTokens = Math.ceil(previousChunkEnd.length / CHARS_PER_TOKEN);
+      wordCount = previousChunkEnd.split(/\s+/).length;
     }
   }
 
