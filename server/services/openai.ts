@@ -7,10 +7,10 @@ import { Stream } from "stream";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
-const MAX_TOKENS_PER_CHUNK = 2500; // Reduced for safety margin
+const MAX_TOKENS_PER_CHUNK = 1500; // Reduced for safety margin
 const CHARS_PER_TOKEN = 4;
 const MAX_CHUNK_SIZE = MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN;
-const CHUNK_OVERLAP = 1000; // Increased overlap for better context
+const CHUNK_OVERLAP = 500; // Balanced overlap for context
 
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -53,18 +53,17 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
     if (line.trim() === '') {
       if (paragraphBuffer) {
         const paragraph = paragraphBuffer.trim();
-        // Add extra margin in token estimation
-        const paragraphTokens = Math.ceil(paragraph.length / CHARS_PER_TOKEN) + 20; // Increased margin
+        const paragraphTokens = Math.ceil(paragraph.length / CHARS_PER_TOKEN) + 10;
 
         // If adding this paragraph would exceed our token limit
         if (estimatedTokens + paragraphTokens > MAX_TOKENS_PER_CHUNK) {
           // Keep track of the end of the current chunk for overlap
-          previousChunkEnd = currentChunk.split('\n').slice(-5).join('\n'); // Increased context window
+          previousChunkEnd = currentChunk.split('\n').slice(-3).join('\n');
 
           console.log(`Yielding chunk with estimated ${estimatedTokens} tokens`);
           yield currentChunk;
 
-          // Start new chunk with more overlap from previous chunk
+          // Start new chunk with overlap from previous chunk
           currentChunk = previousChunkEnd + '\n\n' + paragraph;
           estimatedTokens = Math.ceil(previousChunkEnd.length / CHARS_PER_TOKEN) + paragraphTokens;
         } else {
@@ -79,9 +78,9 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
       paragraphBuffer += (paragraphBuffer ? ' ' : '') + line;
     }
 
-    // Force chunk break if we're getting close to the limit (70% to be safer)
+    // Force chunk break if we're getting close to the limit
     if (estimatedTokens > MAX_TOKENS_PER_CHUNK * 0.7) {
-      previousChunkEnd = currentChunk.split('\n').slice(-5).join('\n');
+      previousChunkEnd = currentChunk.split('\n').slice(-3).join('\n');
       console.log(`Forcing chunk break at ${estimatedTokens} tokens (70% of limit)`);
       yield currentChunk;
       currentChunk = previousChunkEnd + '\n\n';
@@ -92,12 +91,11 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
   // Process any remaining paragraph in the buffer
   if (paragraphBuffer) {
     const paragraph = paragraphBuffer.trim();
-    if (currentChunk) {
-      yield currentChunk + '\n\n' + paragraph;
-    } else {
-      yield paragraph;
-    }
-  } else if (currentChunk) {
+    currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
+  }
+
+  // Yield final chunk if not empty
+  if (currentChunk.trim()) {
     yield currentChunk;
   }
 }
@@ -138,7 +136,7 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
       try {
         const response = await retryWithDelay(() =>
           openai.chat.completions.create({
-            model: "gpt-4",
+            model: "gpt-4-1106-preview",
             messages: [
               {
                 role: "system",
@@ -151,7 +149,7 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
               { role: "user", content: chunk }
             ],
             temperature: 0.7,
-            max_tokens: 2000,
+            max_tokens: 1500,
           })
         );
 
