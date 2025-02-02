@@ -25,6 +25,7 @@ export default function Home() {
     try {
       await saveArticle.mutateAsync({
         ...editedArticle,
+        id: existingArticle?.id || editedArticle.id,
         youtubeUrl: (existingArticle || generatedArticle)?.youtubeUrl,
         seoScore: (existingArticle || generatedArticle)?.seoScore,
         transcript: (existingArticle || generatedArticle)?.transcript,

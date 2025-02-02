@@ -211,6 +211,29 @@ export function registerRoutes(app: Express) {
     }
   });
 
+  // Delete multiple articles
+  app.delete("/api/articles", async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids)) {
+        return res.status(400).json({ message: "Invalid article IDs" });
+      }
+
+      await db.delete(articles).where(inArray(articles.id, ids));
+      
+      res.status(200).json({
+        status: "success",
+        message: "Articles deleted successfully"
+      });
+    } catch (error: any) {
+      console.error("Failed to delete articles:", error);
+      res.status(500).json({ 
+        message: "Failed to delete articles",
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
+  });
+
   // Save edited article
   app.post("/api/articles/save", async (req, res) => {
     try {

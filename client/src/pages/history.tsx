@@ -1,5 +1,7 @@
+
 import { useArticles } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -10,25 +12,65 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useLocation } from "wouter";
-import { ExternalLink, Edit, Search } from "lucide-react";
-
-interface GenerationChunk {
-  originalText: string;
-  summary: string;
-  position: number;
-}
+import { ExternalLink, Edit, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "@/hooks/use-toast";
 
 export default function History() {
-  const { data: articles, isLoading } = useArticles();
   const [, setLocation] = useLocation();
+  const { data: articles, isLoading, mutate } = useArticles();
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
+  const handleDelete = async () => {
+    if (!selectedIds.length) return;
+    
+    try {
+      const response = await fetch('/api/articles', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds })
+      });
+
+      if (!response.ok) throw new Error('Failed to delete articles');
+
+      await mutate();
+      setSelectedIds([]);
+      toast({
+        title: "Success",
+        description: "Selected articles deleted successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete articles",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => 
+      prev.includes(id) 
+        ? prev.filter(i => i !== id)
+        : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds(prev => 
+      prev.length === articles?.length 
+        ? [] 
+        : (articles?.map(a => a.id) || [])
+    );
+  };
 
   if (isLoading) {
     return (
-      <div className="container mx-auto py-8 space-y-8">
-        <h1 className="text-3xl font-bold">History</h1>
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-[100px] w-full" />
+      <div className="container mx-auto py-8">
+        <Skeleton className="h-8 w-48 mb-4" />
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>
       </div>
@@ -36,57 +78,68 @@ export default function History() {
   }
 
   return (
-    <div className="container mx-auto py-8 space-y-8">
-      <h1 className="text-3xl font-bold">History</h1>
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead>YouTube Link</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {articles?.map((article) => (
-              <TableRow key={article.id}>
-                <TableCell className="font-medium">{article.title}</TableCell>
-                <TableCell>
-                  <a
-                    href={article.youtubeUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center hover:underline text-blue-500"
-                  >
-                    {article.youtubeUrl}
-                    <ExternalLink className="ml-1 h-4 w-4" />
-                  </a>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setLocation(`/edit/${article.id}`)}
-                    >
-                      <Edit className="h-4 w-4 mr-1" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setLocation(`/analysis/${article.id}`)}
-                    >
-                      <Search className="h-4 w-4 mr-1" />
-                      Analysis
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+    <div className="container mx-auto py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Article History</h1>
+        {selectedIds.length > 0 && (
+          <Button 
+            variant="destructive"
+            onClick={handleDelete}
+            className="flex items-center gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete Selected ({selectedIds.length})
+          </Button>
+        )}
       </div>
+
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-12">
+              <Checkbox 
+                checked={selectedIds.length === articles?.length}
+                onCheckedChange={toggleSelectAll}
+              />
+            </TableHead>
+            <TableHead>Title</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {articles?.map((article) => (
+            <TableRow key={article.id}>
+              <TableCell>
+                <Checkbox 
+                  checked={selectedIds.includes(article.id)}
+                  onCheckedChange={() => toggleSelect(article.id)}
+                />
+              </TableCell>
+              <TableCell>{article.title}</TableCell>
+              <TableCell>
+                {new Date(article.createdAt).toLocaleDateString()}
+              </TableCell>
+              <TableCell className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setLocation(`/?id=${article.id}`)}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.open(`/preview/${article.id}`, '_blank')}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
