@@ -6,7 +6,8 @@ import { useLocation, useParams } from "wouter";
 
 export default function Home() {
   const [, setLocation] = useLocation();
-  const { id } = useParams();
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
   const saveArticle = useSaveArticle();
 
   // Fetch existing article if we're in edit mode
