@@ -202,8 +202,7 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
                          If this is not the first chunk, incorporate it seamlessly with: ${previousSummaryEnd}
                          Focus on maintaining narrative flow and context.
                          Length: Keep it under 1000 words while preserving all key information.
-                         Do not include citation markers or reference numbers.
-                         Also identify any key topics and concepts discussed in this segment.`
+                         Do not include citation markers or reference numbers.`
               },
               { role: "user", content: chunk }
             ],
@@ -240,7 +239,7 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
         messages: [
           {
             role: "system",
-            content: "Analyze the transcript summaries and identify 3-5 key topics that would benefit from additional research. Focus on technical or specialized topics."
+            content: "Analyze the transcript summaries and identify 3-5 key topics that would benefit from additional research. Format the response as a JSON object with a 'topics' array containing the identified topics."
           },
           {
             role: "user",
@@ -264,9 +263,7 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
         messages: [
           {
             role: "system",
-            content: `You are an expert content writer. Your task is to create a comprehensive article from the provided summaries.
-            Do not include any citation markers, reference numbers, or source indicators.
-            Your response must be in JSON format with the following structure:
+            content: `You are an expert content writer. Create a comprehensive article from the provided summaries and format the response as a JSON object with the following structure:
             {
               "article": "comprehensive article content with proper formatting",
               "titles": ["title1", "title2", "title3", "title4", "title5"],
