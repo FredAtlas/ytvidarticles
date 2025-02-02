@@ -214,30 +214,52 @@ export function registerRoutes(app: Express) {
   // Save edited article
   app.post("/api/articles/save", async (req, res) => {
     try {
-      const { content, title, metaDescription, tags, transcript, keyTopics } = req.body;
+      const { id, content, title, metaDescription, tags, transcript, keyTopics } = req.body;
 
       if (!content || !title || !metaDescription || !tags) {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
-      const article = await db.insert(articles).values({
-        youtubeUrl: req.body.youtubeUrl || '',
-        title,
-        content,
-        transcript: transcript || '',
-        metaDescription,
-        seoTitles: [title],
-        tags,
-        seoScore: req.body.seoScore || 0,
-        keyTopics: keyTopics || [],
-        missingTopics: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }).returning();
+      let article;
+
+      if (id) {
+        // Update existing article
+        article = await db.update(articles)
+          .set({
+            title,
+            content,
+            transcript: transcript || '',
+            metaDescription,
+            seoTitles: [title],
+            tags,
+            seoScore: req.body.seoScore || 0,
+            keyTopics: keyTopics || [],
+            missingTopics: [],
+            updatedAt: new Date(),
+          })
+          .where(eq(articles.id, id))
+          .returning();
+      } else {
+        // Create new article
+        article = await db.insert(articles).values({
+          youtubeUrl: req.body.youtubeUrl || '',
+          title,
+          content,
+          transcript: transcript || '',
+          metaDescription,
+          seoTitles: [title],
+          tags,
+          seoScore: req.body.seoScore || 0,
+          keyTopics: keyTopics || [],
+          missingTopics: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }).returning();
+      }
 
       res.status(200).json({
         status: "success",
-        message: "Article saved successfully",
+        message: id ? "Article updated successfully" : "Article saved successfully",
         data: article[0]
       });
     } catch (error: any) {

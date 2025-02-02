@@ -11,6 +11,12 @@ import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SiWordpress } from "react-icons/si";
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface GenerationChunk {
   originalText: string;
@@ -28,7 +34,7 @@ interface ArticleEditorProps {
   keyTopics?: string[];
   missingTopics?: string[];
   generationChunks?: GenerationChunk[];
-  onSave: (data: { content: string; title: string; metaDescription: string; tags: string[] }) => void;
+  onSave: (data: { id?: number; content: string; title: string; metaDescription: string; tags: string[] }) => void;
 }
 
 interface SocialMediaContent {
@@ -129,31 +135,58 @@ export default function ArticleEditor({
     },
   });
 
+    const handleSave = async () => {
+    try {
+      await onSave({
+        id,
+        content: editedContent,
+        title: selectedTitle,
+        metaDescription: editedMeta,
+        tags: editedTags,
+      });
+    } catch (error) {
+      console.error("Failed to save:", error);
+    }
+  };
+
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Article Editor</CardTitle>
-            <Button
-              onClick={() => exportToWordPress.mutate()}
-              disabled={exportToWordPress.isPending || !id}
-              variant="outline"
-              className="gap-2"
-              title={!id ? "Save article first before exporting to WordPress" : "Export as draft to WordPress"}
-            >
-              {exportToWordPress.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Exporting to WordPress...
-                </>
-              ) : (
-                <>
-                  <SiWordpress className="h-4 w-4" />
-                  Export to WordPress
-                </>
-              )}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div>
+                    <Button
+                      onClick={() => exportToWordPress.mutate()}
+                      disabled={exportToWordPress.isPending || !id}
+                      variant="outline"
+                      className="gap-2"
+                    >
+                      {exportToWordPress.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Exporting to WordPress...
+                        </>
+                      ) : (
+                        <>
+                          <SiWordpress className="h-4 w-4" />
+                          Export to WordPress
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {!id 
+                    ? "Save the article first before exporting to WordPress" 
+                    : "Export this article as a draft to WordPress"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </CardHeader>
         <CardContent>
@@ -236,16 +269,7 @@ export default function ArticleEditor({
                 </div>
               </div>
 
-              <Button
-                onClick={() =>
-                  onSave({
-                    content: editedContent,
-                    title: selectedTitle,
-                    metaDescription: editedMeta,
-                    tags: editedTags,
-                  })
-                }
-              >
+              <Button onClick={handleSave}>
                 Save Changes
               </Button>
             </TabsContent>
