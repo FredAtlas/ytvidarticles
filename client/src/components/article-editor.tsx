@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { useForm } from "react-hook-form";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArticleComparison } from "./article-comparison";
@@ -10,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface GenerationChunk {
   originalText: string;
@@ -18,7 +18,7 @@ interface GenerationChunk {
 }
 
 interface ArticleEditorProps {
-  id?: number; // Added ID prop
+  id?: number;
   content: string;
   titles: string[];
   metaDescription: string;
@@ -132,10 +132,10 @@ export default function ArticleEditor({
 
               <div>
                 <label className="text-sm font-medium">Content</label>
-                <Textarea
+                <textarea
                   value={editedContent}
                   onChange={(e) => setEditedContent(e.target.value)}
-                  className="min-h-[400px]"
+                  className="min-h-[400px] w-full rounded-md border p-2"
                 />
               </div>
 
@@ -205,7 +205,6 @@ export default function ArticleEditor({
                 keyTopics={keyTopics}
                 missingTopics={missingTopics}
                 generationChunks={generationChunks}
-                onAddSection={handleAddSection}
               />
             </TabsContent>
 
