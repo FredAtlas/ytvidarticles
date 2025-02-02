@@ -5,6 +5,11 @@ interface Message {
   content: string;
 }
 
+interface ResearchTopic {
+  topic: string;
+  content: string;
+}
+
 export async function humanizeContent(content: string) {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey) {
@@ -42,6 +47,57 @@ export async function humanizeContent(content: string) {
 
   const data = await response.json();
   return data.choices[0].message.content;
+}
+
+export async function researchTopics(topics: string[]): Promise<ResearchTopic[]> {
+  const apiKey = process.env.PERPLEXITY_API_KEY;
+  if (!apiKey) {
+    throw new Error("Perplexity API key not configured in environment variables");
+  }
+
+  const results: ResearchTopic[] = [];
+
+  for (const topic of topics) {
+    const messages: Message[] = [
+      {
+        role: "system",
+        content: "You are a research expert. Search the web and provide detailed, factual information about the topic. Include recent developments, statistics, and expert insights. Format the response as a well-structured article section."
+      },
+      {
+        role: "user",
+        content: `Research this topic in detail: ${topic}`
+      }
+    ];
+
+    const response = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "llama-3.1-sonar-small-128k-online",
+        messages,
+        temperature: 0.7,
+        max_tokens: 4000,
+        search_domain_filter: ["wikipedia.org", "arxiv.org", "scholar.google.com"],
+        return_citations: true,
+        search_recency_filter: "month"
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to research topic: ${topic}`);
+    }
+
+    const data = await response.json();
+    results.push({
+      topic,
+      content: data.choices[0].message.content
+    });
+  }
+
+  return results;
 }
 
 export async function integrateContent(existingArticle: string, newSection: string) {

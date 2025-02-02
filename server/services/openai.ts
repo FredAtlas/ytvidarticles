@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { db } from "@db";
 import { settings } from "@db/schema";
+import { researchTopics, integrateContent } from "../lib/perplexity";
 import fs from "fs";
 import readline from "readline";
 import { Stream } from "stream";
@@ -230,10 +231,34 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
       }
     }
 
-    console.log(`Successfully processed ${chunkCount} chunks. Generating final article...`);
+    console.log(`Successfully processed ${chunkCount} chunks. Extracting key topics...`);
 
-    // Generate final article with all the content
-    const response = await retryWithDelay(() =>
+    // Extract key topics for research
+    const topicsResponse = await retryWithDelay(() =>
+      openai.chat.completions.create({
+        model: "gpt-4-1106-preview",
+        messages: [
+          {
+            role: "system",
+            content: "Analyze the transcript summaries and identify 3-5 key topics that would benefit from additional research. Focus on technical or specialized topics."
+          },
+          {
+            role: "user",
+            content: summaries.join('\n\n')
+          }
+        ],
+        response_format: { type: "json_object" }
+      })
+    );
+
+    const topicsData = JSON.parse(topicsResponse.choices[0].message.content || "{}");
+    const keyTopics: string[] = topicsData.topics || [];
+
+    console.log("Researching additional content for key topics...");
+    const researchResults = await researchTopics(keyTopics);
+
+    console.log("Generating initial article...");
+    const initialResponse = await retryWithDelay(() =>
       openai.chat.completions.create({
         model: "gpt-4-1106-preview",
         messages: [
@@ -250,15 +275,7 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
               "keyTopics": ["topic1", "topic2"],
               "missingTopics": ["topic1", "topic2"],
               "seoScore": 85
-            }
-
-            Requirements:
-            1. Maintain depth and comprehensiveness
-            2. Include all important facts and statistics
-            3. Create clear structure with transitions
-            4. Use subheadings to organize topics
-            5. Ensure natural flow and consistency
-            6. Do not include any reference markers like [1], [2], etc.`
+            }`
           },
           {
             role: "user",
@@ -270,40 +287,26 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
           }
         ],
         temperature: 0.7,
-        response_format: { type: "json_object" },
+        response_format: { type: "json_object" }
       })
     );
 
-    const content = response.choices[0].message.content;
-    if (!content) {
-      throw new Error("No content received from OpenAI");
+    const initialContent = JSON.parse(initialResponse.choices[0].message.content || "{}");
+
+    // Integrate researched content
+    let enhancedArticle = initialContent.article;
+    for (const research of researchResults) {
+      enhancedArticle = await integrateContent(enhancedArticle, research.content);
     }
 
-    try {
-      console.log("Parsing OpenAI response...");
-      const parsedContent = JSON.parse(content);
+    return {
+      ...initialContent,
+      article: enhancedArticle,
+      generationChunks
+    };
 
-      const requiredFields = [
-        'article', 'titles', 'metaDescription', 'tags',
-        'keyTopics', 'missingTopics', 'seoScore'
-      ];
-
-      const missingFields = requiredFields.filter(field => !(field in parsedContent));
-      if (missingFields.length > 0) {
-        throw new Error(`Invalid response structure. Missing fields: ${missingFields.join(', ')}`);
-      }
-
-      return {
-        ...parsedContent,
-        generationChunks
-      };
-    } catch (parseError) {
-      console.error("Failed to parse OpenAI response:", parseError);
-      console.error("Raw response:", content);
-      throw new Error("Failed to parse AI response into required format");
-    }
   } catch (error: any) {
-    console.error("OpenAI API Error:", error);
+    console.error("Article generation error:", error);
     throw new Error(`Failed to generate article: ${error.message}`);
   }
 }
