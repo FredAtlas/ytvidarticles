@@ -140,6 +140,7 @@ export default function ArticleEditor({
               disabled={exportToWordPress.isPending || !id}
               variant="outline"
               className="gap-2"
+              title={!id ? "Save article first before exporting to WordPress" : "Export as draft to WordPress"}
             >
               {exportToWordPress.isPending ? (
                 <>
