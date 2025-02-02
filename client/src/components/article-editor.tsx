@@ -135,7 +135,7 @@ export default function ArticleEditor({
     },
   });
 
-    const handleSave = async () => {
+  const handleSave = async () => {
     try {
       await onSave({
         id,
@@ -148,7 +148,6 @@ export default function ArticleEditor({
       console.error("Failed to save:", error);
     }
   };
-
 
   return (
     <div className="space-y-4">
