@@ -201,6 +201,7 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
                          If this is not the first chunk, incorporate it seamlessly with: ${previousSummaryEnd}
                          Focus on maintaining narrative flow and context.
                          Length: Keep it under 1000 words while preserving all key information.
+                         Do not include citation markers or reference numbers.
                          Also identify any key topics and concepts discussed in this segment.`
               },
               { role: "user", content: chunk }
@@ -212,11 +213,9 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
 
         const summary = response.choices[0].message.content;
         if (summary) {
-          // Keep track of the end of this summary for context in next chunk
-          previousSummaryEnd = summary.split('\n').slice(-3).join('\n');
+          previousSummaryEnd = summary.split('\n').slice(-2).join('\n');
           summaries.push(summary);
 
-          // Store chunk information
           generationChunks.push({
             originalText: chunk,
             summary: summary,
@@ -241,6 +240,7 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
           {
             role: "system",
             content: `You are an expert content writer. Your task is to create a comprehensive article from the provided summaries.
+            Do not include any citation markers, reference numbers, or source indicators.
             Your response must be in JSON format with the following structure:
             {
               "article": "comprehensive article content with proper formatting",
@@ -257,7 +257,8 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
             2. Include all important facts and statistics
             3. Create clear structure with transitions
             4. Use subheadings to organize topics
-            5. Ensure natural flow and consistency`
+            5. Ensure natural flow and consistency
+            6. Do not include any reference markers like [1], [2], etc.`
           },
           {
             role: "user",
