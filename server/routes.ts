@@ -5,7 +5,7 @@ import { articles, settings } from "@db/schema";
 import { getTranscript } from "./lib/youtube";
 import { generateArticle } from "./services/openai";
 import { humanizeContent, integrateContent } from "./lib/perplexity";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import { generateSocialMediaContent } from "./services/social-media";
