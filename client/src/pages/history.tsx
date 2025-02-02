@@ -31,18 +31,22 @@ export default function History() {
         body: JSON.stringify({ ids: selectedIds })
       });
 
-      if (!response.ok) throw new Error('Failed to delete articles');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete articles');
+      }
 
-      await mutate();
+      // Force refetch the articles data
+      await mutate(undefined, { revalidate: true });
       setSelectedIds([]);
       toast({
         title: "Success",
         description: "Selected articles deleted successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to delete articles",
+        description: error.message || "Failed to delete articles",
         variant: "destructive"
       });
     }
