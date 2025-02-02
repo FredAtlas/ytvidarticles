@@ -202,7 +202,7 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
                          If this is not the first chunk, incorporate it seamlessly with: ${previousSummaryEnd}
                          Focus on maintaining narrative flow and context.
                          Length: Keep it under 1000 words while preserving all key information.
-                         Do not include citation markers or reference numbers.`
+                         Do not include citation markers, reference numbers, or source indicators.`
               },
               { role: "user", content: chunk }
             ],
@@ -256,30 +256,44 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
     console.log("Researching additional content for key topics...");
     const researchResults = await researchTopics(keyTopics);
 
-    console.log("Generating initial article...");
+    console.log("Generating initial article with integrated research...");
     const initialResponse = await retryWithDelay(() =>
       openai.chat.completions.create({
         model: "gpt-4-1106-preview",
         messages: [
           {
             role: "system",
-            content: `You are an expert content writer. Create a comprehensive article from the provided summaries and format the response as a JSON object with the following structure:
+            content: `You are an expert content writer creating a comprehensive article.
+
+            Guidelines:
+            1. Seamlessly integrate the transcript content with the research information
+            2. Maintain a single, cohesive narrative throughout
+            3. Use only one conclusion section at the end
+            4. Do not include any citations, reference numbers, or source indicators
+            5. Structure the content naturally without obvious transitions between transcript and research content
+
+            Format the response as a JSON object with the following structure:
             {
-              "article": "comprehensive article content with proper formatting",
-              "titles": ["title1", "title2", "title3", "title4", "title5"],
-              "metaDescription": "155-character meta description",
-              "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-              "keyTopics": ["topic1", "topic2"],
-              "missingTopics": ["topic1", "topic2"],
-              "seoScore": 85
+              "article": "the seamlessly integrated article content",
+              "titles": ["5 SEO optimized titles"],
+              "metaDescription": "155 character meta description",
+              "tags": ["at least 5 tags including primary keyword"],
+              "keyTopics": ["main topics covered"],
+              "missingTopics": ["topics needing more detail"],
+              "seoScore": number between 0-100
             }`
           },
           {
             role: "user",
-            content: `Create a comprehensive article based on these transcript summaries:
+            content: `Create a comprehensive article by integrating these transcript summaries and research:
+
+            Transcript content:
             ${summaries.join('\n\n')}
 
-            ${settingsData?.editorialGuidelines ? `\nUse these editorial guidelines for style and tone: ${settingsData.editorialGuidelines}` : ''}
+            Additional research:
+            ${researchResults.map(r => r.content).join('\n\n')}
+
+            ${settingsData?.editorialGuidelines ? `\nUse these editorial guidelines: ${settingsData.editorialGuidelines}` : ''}
             ${settingsData?.writingSamples?.length ? `\nReference this writing style: ${settingsData.writingSamples[0]}` : ''}`
           }
         ],
@@ -288,17 +302,10 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
       })
     );
 
-    const initialContent = JSON.parse(initialResponse.choices[0].message.content || "{}");
-
-    // Integrate researched content
-    let enhancedArticle = initialContent.article;
-    for (const research of researchResults) {
-      enhancedArticle = await integrateContent(enhancedArticle, research.content);
-    }
+    const result = JSON.parse(initialResponse.choices[0].message.content || "{}");
 
     return {
-      ...initialContent,
-      article: enhancedArticle,
+      ...result,
       generationChunks
     };
 

@@ -18,6 +18,7 @@ interface GenerationChunk {
 }
 
 interface ArticleEditorProps {
+  id?: number; // Added ID prop
   content: string;
   titles: string[];
   metaDescription: string;
@@ -49,6 +50,7 @@ interface SocialMediaContent {
 }
 
 export default function ArticleEditor({
+  id,
   content,
   titles,
   metaDescription,
@@ -66,46 +68,11 @@ export default function ArticleEditor({
   const { toast } = useToast();
   const [socialContent, setSocialContent] = useState<SocialMediaContent | null>(null);
 
-  // Debug logging for chunks
-  console.log("ArticleEditor received chunks:", {
-    count: generationChunks?.length,
-    chunks: generationChunks
-  });
-
-  const handleAddSection = async (section: string) => {
-    try {
-      const response = await fetch("/api/articles/integrate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          existingContent: editedContent,
-          newSection: section
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to integrate content");
-      }
-
-      const { integratedContent } = await response.json();
-      setEditedContent(integratedContent);
-
-      toast({
-        title: "Content Added",
-        description: "New section has been integrated into the article",
-      });
-    } catch (error) {
-      console.error("Failed to integrate content:", error);
-      toast({
-        title: "Error",
-        description: "Failed to add new section. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
   const generateSocialContent = useMutation({
     mutationFn: async () => {
+      if (!id) {
+        throw new Error("Article must be saved before generating social content");
+      }
       const response = await fetch(`/api/articles/${id}/social-media`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -122,15 +89,14 @@ export default function ArticleEditor({
         description: "Social media content generated successfully",
       });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to generate social media content",
+        description: error.message,
         variant: "destructive",
       });
     },
   });
-
 
   return (
     <div className="space-y-4">
@@ -140,7 +106,7 @@ export default function ArticleEditor({
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="edit" className="space-y-4">
-            <TabsList>
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="edit">Edit Article</TabsTrigger>
               <TabsTrigger value="compare">Compare with Transcript</TabsTrigger>
               <TabsTrigger value="social">Social Media</TabsTrigger>
@@ -247,7 +213,7 @@ export default function ArticleEditor({
               <div className="space-y-4">
                 <Button
                   onClick={() => generateSocialContent.mutate()}
-                  disabled={generateSocialContent.isPending}
+                  disabled={generateSocialContent.isPending || !id}
                   className="w-full"
                 >
                   {generateSocialContent.isPending ? (
@@ -255,6 +221,8 @@ export default function ArticleEditor({
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Generating social media content...
                     </>
+                  ) : !id ? (
+                    "Save article first to generate social content"
                   ) : (
                     "Generate Social Media Content"
                   )}
