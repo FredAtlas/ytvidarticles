@@ -8,6 +8,7 @@ import { humanizeContent, integrateContent } from "./lib/perplexity";
 import { eq } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
+import { generateSocialMediaContent } from "./services/social-media";
 
 export function registerRoutes(app: Express) {
   const httpServer = createServer(app);
@@ -133,6 +134,32 @@ export function registerRoutes(app: Express) {
     }
   });
 
+  // Generate social media content for an article
+  app.post("/api/articles/:id/social-media", async (req, res) => {
+    try {
+      const article = await db.query.articles.findFirst({
+        where: eq(articles.id, parseInt(req.params.id)),
+      });
+
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+
+      const socialContent = await generateSocialMediaContent(article.content);
+
+      res.json({
+        status: "success",
+        data: socialContent
+      });
+    } catch (error: any) {
+      console.error("Failed to generate social media content:", error);
+      res.status(500).json({ 
+        message: "Failed to generate social media content",
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
+  });
+
   // Get settings
   app.get("/api/settings", async (req, res) => {
     try {
@@ -221,37 +248,36 @@ export function registerRoutes(app: Express) {
     }
   });
 
-  // Enhanced content integration endpoint
-  app.post("/api/articles/integrate", async (req, res) => {
-    try {
-      const { existingContent, newSection } = req.body;
-
-      if (!existingContent || !newSection) {
-        return res.status(400).json({ message: "Missing required content" });
+    // Enhanced content integration endpoint
+    app.post("/api/articles/integrate", async (req, res) => {
+      try {
+        const { existingContent, newSection } = req.body;
+  
+        if (!existingContent || !newSection) {
+          return res.status(400).json({ message: "Missing required content" });
+        }
+  
+        // Get settings for context
+        const settingsData = await db.query.settings.findFirst();
+  
+        // Call enhanced content integration
+        const integratedContent = await integrateContent(
+          existingContent, 
+          newSection,
+          settingsData?.editorialGuidelines
+        );
+  
+        res.status(200).json({
+          status: "success",
+          integratedContent
+        });
+      } catch (error: any) {
+        console.error("Content integration error:", error);
+        res.status(500).json({ 
+          message: "Failed to integrate content",
+          details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
       }
-
-      // Get settings for context
-      const settingsData = await db.query.settings.findFirst();
-
-      // Call enhanced content integration
-      const integratedContent = await integrateContent(
-        existingContent, 
-        newSection,
-        settingsData?.editorialGuidelines
-      );
-
-      res.status(200).json({
-        status: "success",
-        integratedContent
-      });
-    } catch (error: any) {
-      console.error("Content integration error:", error);
-      res.status(500).json({ 
-        message: "Failed to integrate content",
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      });
-    }
-  });
-
+    });
   return httpServer;
 }

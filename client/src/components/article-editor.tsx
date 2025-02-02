@@ -8,6 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArticleComparison } from "./article-comparison";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useMutation } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 
 interface GenerationChunk {
   originalText: string;
@@ -27,6 +29,25 @@ interface ArticleEditorProps {
   onSave: (data: { content: string; title: string; metaDescription: string; tags: string[] }) => void;
 }
 
+interface SocialMediaContent {
+  twitter: {
+    tweets: string[];
+    hashtags: string[];
+  };
+  linkedin: {
+    post: string;
+    bullet_points: string[];
+  };
+  facebook: {
+    post: string;
+    key_points: string[];
+  };
+  instagram: {
+    caption: string;
+    hashtags: string[];
+  };
+}
+
 export default function ArticleEditor({
   content,
   titles,
@@ -43,6 +64,7 @@ export default function ArticleEditor({
   const [editedMeta, setEditedMeta] = useState(metaDescription);
   const [editedTags, setEditedTags] = useState(tags);
   const { toast } = useToast();
+  const [socialContent, setSocialContent] = useState<SocialMediaContent | null>(null);
 
   // Debug logging for chunks
   console.log("ArticleEditor received chunks:", {
@@ -82,6 +104,34 @@ export default function ArticleEditor({
     }
   };
 
+  const generateSocialContent = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/articles/${id}/social-media`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!response.ok) {
+        throw new Error("Failed to generate social media content");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setSocialContent(data.data);
+      toast({
+        title: "Success",
+        description: "Social media content generated successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to generate social media content",
+        variant: "destructive",
+      });
+    },
+  });
+
+
   return (
     <div className="space-y-4">
       <Card>
@@ -93,6 +143,7 @@ export default function ArticleEditor({
             <TabsList>
               <TabsTrigger value="edit">Edit Article</TabsTrigger>
               <TabsTrigger value="compare">Compare with Transcript</TabsTrigger>
+              <TabsTrigger value="social">Social Media</TabsTrigger>
             </TabsList>
 
             <TabsContent value="edit" className="space-y-4">
@@ -190,6 +241,91 @@ export default function ArticleEditor({
                 generationChunks={generationChunks}
                 onAddSection={handleAddSection}
               />
+            </TabsContent>
+
+            <TabsContent value="social">
+              <div className="space-y-4">
+                <Button
+                  onClick={() => generateSocialContent.mutate()}
+                  disabled={generateSocialContent.isPending}
+                  className="w-full"
+                >
+                  {generateSocialContent.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating social media content...
+                    </>
+                  ) : (
+                    "Generate Social Media Content"
+                  )}
+                </Button>
+
+                {socialContent && (
+                  <div className="space-y-6">
+                    {/* Twitter */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">Twitter Posts</h3>
+                      <div className="space-y-2">
+                        {socialContent.twitter.tweets.map((tweet, i) => (
+                          <div key={i} className="p-4 rounded-lg border">
+                            <p>{tweet}</p>
+                            <div className="mt-2">
+                              {socialContent.twitter.hashtags.map((tag, j) => (
+                                <Badge key={j} variant="secondary" className="mr-2">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* LinkedIn */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">LinkedIn Post</h3>
+                      <div className="p-4 rounded-lg border">
+                        <p>{socialContent.linkedin.post}</p>
+                        <ul className="mt-2 list-disc pl-5">
+                          {socialContent.linkedin.bullet_points.map((point, i) => (
+                            <li key={i}>{point}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Facebook */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">Facebook Post</h3>
+                      <div className="p-4 rounded-lg border">
+                        <p>{socialContent.facebook.post}</p>
+                        <div className="mt-2">
+                          {socialContent.facebook.key_points.map((point, i) => (
+                            <p key={i} className="text-sm text-muted-foreground">
+                              • {point}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Instagram */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">Instagram Caption</h3>
+                      <div className="p-4 rounded-lg border">
+                        <p>{socialContent.instagram.caption}</p>
+                        <div className="mt-2">
+                          {socialContent.instagram.hashtags.map((tag, i) => (
+                            <Badge key={i} variant="secondary" className="mr-2">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </TabsContent>
           </Tabs>
         </CardContent>
