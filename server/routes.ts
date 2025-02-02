@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import { generateSocialMediaContent } from "./services/social-media";
+import { createWordPressDraft } from "./services/wordpress";
 
 export function registerRoutes(app: Express) {
   const httpServer = createServer(app);
@@ -279,5 +280,37 @@ export function registerRoutes(app: Express) {
         });
       }
     });
+    
+  // Export article to WordPress
+  app.post("/api/articles/:id/wordpress-export", async (req, res) => {
+    try {
+      const article = await db.query.articles.findFirst({
+        where: eq(articles.id, parseInt(req.params.id)),
+      });
+
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+
+      const result = await createWordPressDraft(
+        article.title,
+        article.content,
+        article.metaDescription,
+        article.tags
+      );
+
+      res.json({
+        status: "success",
+        message: "Article exported to WordPress successfully",
+        data: result
+      });
+    } catch (error: any) {
+      console.error("Failed to export to WordPress:", error);
+      res.status(500).json({ 
+        message: error.message || "Failed to export to WordPress",
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
+  });
   return httpServer;
 }

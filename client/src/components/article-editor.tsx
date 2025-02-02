@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SiWordpress } from "react-icons/si";
 
 interface GenerationChunk {
   originalText: string;
@@ -98,11 +99,61 @@ export default function ArticleEditor({
     },
   });
 
+  const exportToWordPress = useMutation({
+    mutationFn: async () => {
+      if (!id) {
+        throw new Error("Article must be saved before exporting to WordPress");
+      }
+      const response = await fetch(`/api/articles/${id}/wordpress-export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to export to WordPress");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: `Article exported to WordPress as draft. View it here: ${data.data.url}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Article Editor</CardTitle>
+          <div className="flex justify-between items-center">
+            <CardTitle>Article Editor</CardTitle>
+            <Button
+              onClick={() => exportToWordPress.mutate()}
+              disabled={exportToWordPress.isPending || !id}
+              variant="outline"
+              className="gap-2"
+            >
+              {exportToWordPress.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Exporting to WordPress...
+                </>
+              ) : (
+                <>
+                  <SiWordpress className="h-4 w-4" />
+                  Export to WordPress
+                </>
+              )}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="edit" className="space-y-4">
