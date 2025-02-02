@@ -1,4 +1,3 @@
-
 import { useArticles } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +14,7 @@ import { useLocation } from "wouter";
 import { ExternalLink, Edit, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "@/hooks/use-toast";
+import { ArticlePublicationStatus } from "@/components/article-publication-status";
 
 export default function History() {
   const [, setLocation] = useLocation();
@@ -23,7 +23,7 @@ export default function History() {
 
   const handleDelete = async () => {
     if (!selectedIds.length) return;
-    
+
     try {
       const response = await fetch('/api/articles', {
         method: 'DELETE',
@@ -107,7 +107,8 @@ export default function History() {
               />
             </TableHead>
             <TableHead>Title</TableHead>
-            <TableHead>Date</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Created</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -122,13 +123,20 @@ export default function History() {
               </TableCell>
               <TableCell>{article.title}</TableCell>
               <TableCell>
+                <ArticlePublicationStatus
+                  articleId={article.id}
+                  isPublished={article.isPublished}
+                  publishedAt={article.publishedAt}
+                />
+              </TableCell>
+              <TableCell>
                 {new Date(article.createdAt).toLocaleDateString()}
               </TableCell>
               <TableCell className="flex items-center gap-2">
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setLocation(`/?id=${article.id}`)}
+                  onClick={() => setLocation(`/edit/${article.id}`)}
                 >
                   <Edit className="h-4 w-4" />
                 </Button>

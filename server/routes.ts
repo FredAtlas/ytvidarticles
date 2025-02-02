@@ -363,5 +363,71 @@ export function registerRoutes(app: Express) {
       });
     }
   });
+  
+  // Add this route after the other article-related routes
+  // Update article publication status
+  app.post("/api/articles/:id/publish", async (req, res) => {
+    try {
+      const { publishedAt } = req.body;
+      const id = parseInt(req.params.id);
+
+      const article = await db.update(articles)
+        .set({
+          isPublished: true,
+          publishedAt: publishedAt ? new Date(publishedAt) : new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(articles.id, id))
+        .returning();
+
+      if (!article.length) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+
+      res.json({
+        status: "success",
+        message: "Article marked as published",
+        data: article[0]
+      });
+    } catch (error: any) {
+      console.error("Failed to update publication status:", error);
+      res.status(500).json({ 
+        message: "Failed to update publication status",
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
+  });
+
+  // Unpublish article
+  app.post("/api/articles/:id/unpublish", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+
+      const article = await db.update(articles)
+        .set({
+          isPublished: false,
+          publishedAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(articles.id, id))
+        .returning();
+
+      if (!article.length) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+
+      res.json({
+        status: "success",
+        message: "Article unpublished",
+        data: article[0]
+      });
+    } catch (error: any) {
+      console.error("Failed to unpublish article:", error);
+      res.status(500).json({ 
+        message: "Failed to unpublish article",
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
+  });
   return httpServer;
 }
