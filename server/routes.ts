@@ -215,11 +215,17 @@ export function registerRoutes(app: Express) {
   app.delete("/api/articles", async (req, res) => {
     try {
       const { ids } = req.body;
-      if (!Array.isArray(ids)) {
+      if (!Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({ message: "Invalid article IDs" });
       }
 
-      await db.delete(articles).where(inArray(articles.id, ids));
+      // Ensure all IDs are numbers
+      const numericIds = ids.map(id => Number(id)).filter(id => !isNaN(id));
+      if (numericIds.length === 0) {
+        return res.status(400).json({ message: "No valid article IDs provided" });
+      }
+
+      await db.delete(articles).where(inArray(articles.id, numericIds));
       
       res.status(200).json({
         status: "success",
