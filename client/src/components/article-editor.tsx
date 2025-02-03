@@ -268,9 +268,40 @@ export default function ArticleEditor({
                 </div>
               </div>
 
-              <Button onClick={handleSave}>
-                Save Changes
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={handleSave}>
+                  Save Changes
+                </Button>
+                {id && (
+                  <Button 
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`/api/articles/${id}/rtf`, {
+                          method: 'POST'
+                        });
+                        if (!response.ok) throw new Error('RTF conversion failed');
+                        
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `article-${id}.rtf`;
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                      } catch (error) {
+                        toast({
+                          title: "Error",
+                          description: "Failed to download RTF version",
+                          variant: "destructive"
+                        });
+                      }
+                    }}
+                  >
+                    Download as RTF
+                  </Button>
+                )}
+              </div>
             </TabsContent>
 
             <TabsContent value="compare">

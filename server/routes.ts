@@ -429,5 +429,27 @@ export function registerRoutes(app: Express) {
       });
     }
   });
+  // Convert article to RTF
+  app.post("/api/articles/:id/rtf", async (req, res) => {
+    try {
+      const article = await db.query.articles.findFirst({
+        where: eq(articles.id, parseInt(req.params.id)),
+      });
+
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+
+      const rtfContent = convertToRtf(article.content);
+      
+      res.setHeader('Content-Type', 'application/rtf');
+      res.setHeader('Content-Disposition', `attachment; filename="article-${article.id}.rtf"`);
+      res.send(rtfContent);
+    } catch (error: any) {
+      console.error("Failed to convert to RTF:", error);
+      res.status(500).json({ message: "Failed to convert article to RTF" });
+    }
+  });
+
   return httpServer;
 }
