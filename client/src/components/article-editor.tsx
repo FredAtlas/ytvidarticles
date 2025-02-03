@@ -70,6 +70,7 @@ export default function ArticleEditor({
 }: ArticleEditorProps) {
   const [articleId, setArticleId] = useState(initialId);
   const [editedContent, setEditedContent] = useState(content);
+  const [improvedContent, setImprovedContent] = useState<string | null>(null);
   const [selectedTitle, setSelectedTitle] = useState(titles[0]);
   const [editedMeta, setEditedMeta] = useState(metaDescription);
   const [editedTags, setEditedTags] = useState(tags);
@@ -150,9 +151,10 @@ export default function ArticleEditor({
         throw new Error("Failed to improve content");
       }
       const data = await response.json();
-      setEditedContent(data.content);
+      return data.content;
     },
-    onSuccess: () => {
+    onSuccess: (improvedContent) => {
+      setImprovedContent(improvedContent);
       toast({
         title: "Success",
         description: "Content improved successfully",
@@ -333,6 +335,38 @@ export default function ArticleEditor({
                   )}
                 </Button>
               </div>
+              
+              {improvedContent && (
+                <div className="mt-4 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-semibold">Improved Version</h3>
+                    <Button onClick={() => {
+                      setEditedContent(improvedContent);
+                      setImprovedContent(null);
+                      toast({
+                        title: "Success",
+                        description: "Applied improved version",
+                      });
+                    }}>
+                      Apply Changes
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium">Original Content</label>
+                      <div className="mt-2 p-4 rounded-md border bg-muted/50 whitespace-pre-wrap">
+                        {editedContent}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Improved Content</label>
+                      <div className="mt-2 p-4 rounded-md border bg-muted/50 whitespace-pre-wrap">
+                        {improvedContent}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="html" className="space-y-4">
