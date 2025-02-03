@@ -57,7 +57,7 @@ interface SocialMediaContent {
 }
 
 export default function ArticleEditor({
-  id,
+  id: initialId,
   content,
   titles,
   metaDescription,
@@ -68,6 +68,7 @@ export default function ArticleEditor({
   generationChunks = [],
   onSave
 }: ArticleEditorProps) {
+  const [articleId, setArticleId] = useState(initialId);
   const [editedContent, setEditedContent] = useState(content);
   const [selectedTitle, setSelectedTitle] = useState(titles[0]);
   const [editedMeta, setEditedMeta] = useState(metaDescription);
@@ -169,14 +170,14 @@ export default function ArticleEditor({
   const handleSave = async () => {
     try {
       const savedArticle = await onSave({
-        id,
+        id: articleId,
         content: editedContent,
         title: selectedTitle,
         metaDescription: editedMeta,
         tags: editedTags,
       });
       if (savedArticle?.id) {
-        id = savedArticle.id;
+        setArticleId(savedArticle.id);
         window.history.replaceState(null, '', `/?id=${savedArticle.id}`);
       }
       toast({
@@ -320,7 +321,7 @@ export default function ArticleEditor({
                 <Button 
                   variant="outline"
                   onClick={() => improveContent.mutate()}
-                  disabled={improveContent.isPending}
+                  disabled={improveContent.isPending || !articleId}
                 >
                   {improveContent.isPending ? (
                     <>
