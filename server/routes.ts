@@ -11,6 +11,7 @@ import path from "path";
 import { generateSocialMediaContent } from "./services/social-media";
 import { createWordPressDraft } from "./services/wordpress";
 import { convertToRtf } from "./lib/rtf";
+import { refineContent } from "./services/perplexity";
 
 export function registerRoutes(app: Express) {
   const httpServer = createServer(app);
@@ -142,6 +143,10 @@ export function registerRoutes(app: Express) {
     const id = parseInt(req.params.id);
     const { content } = req.body;
     
+    if (!content) {
+      return res.status(400).json({ error: "Content is required" });
+    }
+    
     const settingsData = await db.query.settings.findFirst();
     const improvedContent = await refineContent(
       content,
@@ -154,7 +159,11 @@ export function registerRoutes(app: Express) {
 
     res.json({ content: improvedContent });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("Content improvement error:", error);
+    res.status(500).json({ 
+      error: "Failed to improve content",
+      details: error.message 
+    });
   }
 });
 
