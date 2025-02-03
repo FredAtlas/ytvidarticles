@@ -1,5 +1,17 @@
-async function refineContent(content: string, writingSamples: string[]) {
+async function refineContent(content: string, writingSamples: string[] = []) {
   const samples = writingSamples.join("\n\n");
+  const formatGuide = `
+Format requirements:
+- Paragraphs: 1-4 sentences maximum
+- Sentences: 70% under 25 words, 30% under 35 words
+- Content blocks: Visual break every 200-300 words
+- Key information density: One unique insight every 150-200 words
+
+Additional guidelines:
+- Remove duplicate conclusions
+- Combine related sections
+- Ensure seamless transitions
+- Maintain consistent flow`;
   
   const response = await fetch("https://api.perplexity.ai/chat/completions", {
     method: "POST",
@@ -12,7 +24,7 @@ async function refineContent(content: string, writingSamples: string[]) {
       messages: [
         {
           role: "system",
-          content: `You are an expert content writer. Analyze the writing samples below and rewrite the given content to match their style and tone, while maintaining SEO optimization:\n\n${samples}`,
+          content: `You are an expert content writer and editor. Rewrite and restructure the content following these requirements:${formatGuide}\n\nStyle reference:${samples}`,
         },
         {
           role: "user",

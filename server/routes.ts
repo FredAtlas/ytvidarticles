@@ -137,7 +137,28 @@ export function registerRoutes(app: Express) {
   });
 
   // Generate social media content for an article
-  app.post("/api/articles/:id/social-media", async (req, res) => {
+  app.post("/api/articles/:id/improve", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { content } = req.body;
+    
+    const settingsData = await db.query.settings.findFirst();
+    const improvedContent = await refineContent(
+      content,
+      settingsData?.writingSamples || []
+    );
+
+    await db.update(articles)
+      .set({ content: improvedContent, updatedAt: new Date() })
+      .where(eq(articles.id, id));
+
+    res.json({ content: improvedContent });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/articles/:id/social-media", async (req, res) => {
     try {
       const article = await db.query.articles.findFirst({
         where: eq(articles.id, parseInt(req.params.id)),

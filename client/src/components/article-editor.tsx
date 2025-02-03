@@ -135,6 +135,37 @@ export default function ArticleEditor({
     },
   });
 
+  const improveContent = useMutation({
+    mutationFn: async () => {
+      if (!id) {
+        throw new Error("Article must be saved before improving");
+      }
+      const response = await fetch(`/api/articles/${id}/improve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editedContent }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to improve content");
+      }
+      const data = await response.json();
+      setEditedContent(data.content);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Content improved successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSave = async () => {
     try {
       await onSave({
@@ -281,6 +312,20 @@ export default function ArticleEditor({
               <div className="flex gap-2">
                 <Button onClick={handleSave}>
                   Save Changes
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => improveContent.mutate()}
+                  disabled={improveContent.isPending || !id}
+                >
+                  {improveContent.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Improving Content...
+                    </>
+                  ) : (
+                    "Improve Content"
+                  )}
                 </Button>
               </div>
             </TabsContent>
