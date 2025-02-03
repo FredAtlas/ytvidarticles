@@ -152,16 +152,16 @@ export default function History() {
                   size="sm"
                   onClick={async () => {
                     try {
-                      const response = await fetch(`/api/articles/${article.id}/rtf`, {
+                      const response = await fetch(`/api/articles/${article.id}/html`, {
                         method: 'POST'
                       });
-                      if (!response.ok) throw new Error('RTF conversion failed');
+                      if (!response.ok) throw new Error('HTML conversion failed');
                       
                       const blob = await response.blob();
                       const url = window.URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
-                      a.download = `article-${article.id}.rtf`;
+                      a.download = `article-${article.id}.html`;
                       a.click();
                       window.URL.revokeObjectURL(url);
                     } catch (error) {
