@@ -156,7 +156,7 @@ export default function History() {
                         method: 'POST'
                       });
                       if (!response.ok) throw new Error('HTML conversion failed');
-                      
+
                       const blob = await response.blob();
                       const url = window.URL.createObjectURL(blob);
                       const a = document.createElement('a');

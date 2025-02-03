@@ -168,13 +168,17 @@ export default function ArticleEditor({
 
   const handleSave = async () => {
     try {
-      await onSave({
+      const savedArticle = await onSave({
         id,
         content: editedContent,
         title: selectedTitle,
         metaDescription: editedMeta,
         tags: editedTags,
       });
+      // Update local id if this was a new article
+      if (!id && savedArticle?.id) {
+        id = savedArticle.id;
+      }
       toast({
         title: "Success",
         description: "Changes saved successfully",
