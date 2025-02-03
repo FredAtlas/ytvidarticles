@@ -78,10 +78,10 @@ export default function ArticleEditor({
 
   const generateSocialContent = useMutation({
     mutationFn: async () => {
-      if (!id) {
+      if (!articleId) {
         throw new Error("Article must be saved before generating social content");
       }
-      const response = await fetch(`/api/articles/${id}/social-media`, {
+      const response = await fetch(`/api/articles/${articleId}/social-media`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -108,10 +108,10 @@ export default function ArticleEditor({
 
   const exportToWordPress = useMutation({
     mutationFn: async () => {
-      if (!id) {
+      if (!articleId) {
         throw new Error("Article must be saved before exporting to WordPress");
       }
-      const response = await fetch(`/api/articles/${id}/wordpress-export`, {
+      const response = await fetch(`/api/articles/${articleId}/wordpress-export`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -138,10 +138,10 @@ export default function ArticleEditor({
 
   const improveContent = useMutation({
     mutationFn: async () => {
-      if (!id) {
+      if (!articleId) {
         throw new Error("Article must be saved before improving");
       }
-      const response = await fetch(`/api/articles/${id}/improve`, {
+      const response = await fetch(`/api/articles/${articleId}/improve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: editedContent }),
@@ -225,7 +225,7 @@ export default function ArticleEditor({
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {!id 
+                  {!articleId 
                     ? "Save the article first before exporting to WordPress" 
                     : "Export this article as a draft to WordPress"}
                 </TooltipContent>
@@ -368,7 +368,7 @@ export default function ArticleEditor({
               <div className="space-y-4">
                 <Button
                   onClick={() => generateSocialContent.mutate()}
-                  disabled={generateSocialContent.isPending || !id}
+                  disabled={generateSocialContent.isPending || !articleId}
                   className="w-full"
                 >
                   {generateSocialContent.isPending ? (
@@ -376,7 +376,7 @@ export default function ArticleEditor({
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Generating social media content...
                     </>
-                  ) : !id ? (
+                  ) : !articleId ? (
                     "Save article first to generate social content"
                   ) : (
                     "Generate Social Media Content"
