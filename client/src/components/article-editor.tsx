@@ -144,8 +144,17 @@ export default function ArticleEditor({
         metaDescription: editedMeta,
         tags: editedTags,
       });
+      toast({
+        title: "Success",
+        description: "Changes saved successfully",
+      });
     } catch (error) {
       console.error("Failed to save:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save changes",
+        variant: "destructive"
+      });
     }
   };
 
@@ -190,8 +199,9 @@ export default function ArticleEditor({
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="edit" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="edit">Edit Article</TabsTrigger>
+              <TabsTrigger value="html">HTML Preview</TabsTrigger>
               <TabsTrigger value="compare">Compare with Transcript</TabsTrigger>
               <TabsTrigger value="social">Social Media</TabsTrigger>
             </TabsList>
@@ -272,6 +282,22 @@ export default function ArticleEditor({
                 <Button onClick={handleSave}>
                   Save Changes
                 </Button>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="html" className="space-y-4">
+              <div className="rounded-md border p-4 bg-white">
+                <div dangerouslySetInnerHTML={{ 
+                  __html: editedContent
+                    .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+                    .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+                    .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/\n\n/g, '</p><p>')
+                    .replace(/^(?!<[h|p])/gm, '<p>')
+                    .replace(/$/gm, '</p>')
+                }} />
               </div>
             </TabsContent>
 
