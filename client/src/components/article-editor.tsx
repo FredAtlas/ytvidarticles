@@ -289,14 +289,17 @@ export default function ArticleEditor({
               <div className="rounded-md border p-4 bg-white">
                 <div dangerouslySetInnerHTML={{ 
                   __html: editedContent
-                    .replace(/^#\s+(.*?)$/gm, '<h1>$1</h1>')
-                    .replace(/^##\s+(.*?)$/gm, '<h2>$1</h2>')
+                    .replace(/^####\s+(.*?)$/gm, '<h4>$1</h4>')
                     .replace(/^###\s+(.*?)$/gm, '<h3>$1</h3>')
+                    .replace(/^##\s+(.*?)$/gm, '<h2>$1</h2>')
+                    .replace(/^#\s+(.*?)$/gm, '<h1>$1</h1>')
                     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                    .replace(/\n\n/g, '</p><p>')
-                    .replace(/^(?!<[h|p])/gm, '<p>')
-                    .split('\n').filter(line => line.trim()).join('\n')
+                    .split('\n\n')
+                    .map(paragraph => paragraph.trim())
+                    .filter(Boolean)
+                    .map(paragraph => `<p>${paragraph}</p>`)
+                    .join('\n')
                 }} />
               </div>
             </TabsContent>
