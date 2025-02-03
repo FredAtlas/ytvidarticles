@@ -175,8 +175,8 @@ export default function ArticleEditor({
         metaDescription: editedMeta,
         tags: editedTags,
       });
-      // Update local id if this was a new article
-      if (!id && savedArticle?.id) {
+      if (savedArticle?.id) {
+        id = savedArticle.id;
         window.history.replaceState(null, '', `/?id=${savedArticle.id}`);
       }
       toast({

@@ -35,11 +35,8 @@ export default function Home() {
 
       toast({
         title: "Success",
-        description: "Article saved to history.",
+        description: "Article saved successfully.",
       });
-
-      // Navigate to history page after successful save
-      setLocation("/history");
     } catch (error) {
       console.error("Failed to save article:", error);
     }
