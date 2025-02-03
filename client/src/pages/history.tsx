@@ -136,7 +136,7 @@ export default function History() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setLocation(`/edit/${article.id}`)}
+                  onClick={() => setLocation(`/?id=${article.id}`)}
                 >
                   <Edit className="h-4 w-4" />
                 </Button>
