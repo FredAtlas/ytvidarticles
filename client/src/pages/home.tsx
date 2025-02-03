@@ -61,6 +61,7 @@ export default function Home() {
 
       {(existingArticle || generatedArticle) && (
         <ArticleEditor
+          id={id ? parseInt(id) : undefined}
           content={existingArticle?.content || generatedArticle?.content}
           titles={existingArticle?.seoTitles || generatedArticle?.seoTitles || []}
           metaDescription={existingArticle?.metaDescription || generatedArticle?.metaDescription}

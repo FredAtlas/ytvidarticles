@@ -206,7 +206,7 @@ export default function ArticleEditor({
                   <div>
                     <Button
                       onClick={() => exportToWordPress.mutate()}
-                      disabled={exportToWordPress.isPending || !id}
+                      disabled={exportToWordPress.isPending || !articleId}
                       variant="outline"
                       className="gap-2"
                     >
