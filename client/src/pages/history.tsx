@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useLocation } from "wouter";
-import { ExternalLink, Edit, Trash2 } from "lucide-react";
+import { ExternalLink, Edit, Trash2, FileDown } from "lucide-react";
 import { useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { ArticlePublicationStatus } from "@/components/article-publication-status";
@@ -146,6 +146,34 @@ export default function History() {
                   onClick={() => window.open(`/preview/${article.id}`, '_blank')}
                 >
                   <ExternalLink className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      const response = await fetch(`/api/articles/${article.id}/rtf`, {
+                        method: 'POST'
+                      });
+                      if (!response.ok) throw new Error('RTF conversion failed');
+                      
+                      const blob = await response.blob();
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `article-${article.id}.rtf`;
+                      a.click();
+                      window.URL.revokeObjectURL(url);
+                    } catch (error) {
+                      toast({
+                        title: "Error",
+                        description: "Failed to download RTF version",
+                        variant: "destructive"
+                      });
+                    }
+                  }}
+                >
+                  <FileDown className="h-4 w-4" />
                 </Button>
               </TableCell>
             </TableRow>
