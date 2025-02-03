@@ -177,7 +177,7 @@ export default function ArticleEditor({
       });
       // Update local id if this was a new article
       if (!id && savedArticle?.id) {
-        id = savedArticle.id;
+        window.history.replaceState(null, '', `/?id=${savedArticle.id}`);
       }
       toast({
         title: "Success",
@@ -320,7 +320,7 @@ export default function ArticleEditor({
                 <Button 
                   variant="outline"
                   onClick={() => improveContent.mutate()}
-                  disabled={improveContent.isPending || !id}
+                  disabled={improveContent.isPending}
                 >
                   {improveContent.isPending ? (
                     <>
