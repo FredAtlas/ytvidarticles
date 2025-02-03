@@ -10,6 +10,7 @@ import fs from "fs";
 import path from "path";
 import { generateSocialMediaContent } from "./services/social-media";
 import { createWordPressDraft } from "./services/wordpress";
+import { convertToRtf } from "./lib/rtf";
 
 export function registerRoutes(app: Express) {
   const httpServer = createServer(app);
