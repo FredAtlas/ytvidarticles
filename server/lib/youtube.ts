@@ -1,4 +1,5 @@
 import { YoutubeTranscript } from 'youtube-transcript';
+import { generateTranscript } from '../services/transcription';
 
 export async function getTranscript(url: string): Promise<string> {
   try {
@@ -9,20 +10,35 @@ export async function getTranscript(url: string): Promise<string> {
     }
     console.log("Extracted video ID:", videoId);
 
-    // Get transcript using youtube-transcript
-    const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId);
-    if (!transcriptItems || transcriptItems.length === 0) {
-      throw new Error("No transcript available for this video. Please ensure the video has closed captions enabled.");
+    try {
+      // First attempt: Try getting transcript via YouTube's API
+      console.log("Attempting to fetch YouTube captions...");
+      const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId);
+      if (transcriptItems && transcriptItems.length > 0) {
+        console.log("Successfully fetched YouTube captions");
+        return transcriptItems
+          .map(item => item.text)
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+    } catch (error: any) {
+      console.log("YouTube captions not available, falling back to audio transcription...");
+      if (error.message.includes("Transcript is disabled")) {
+        // Fall back to audio transcription
+        console.log("Attempting audio transcription...");
+        const transcript = await generateTranscript(url);
+        if (transcript) {
+          console.log("Successfully generated transcript from audio");
+          return transcript;
+        }
+      } else {
+        // If it's not a disabled transcript error, rethrow
+        throw error;
+      }
     }
 
-    // Combine transcript text with proper spacing and punctuation
-    const transcript = transcriptItems
-      .map(item => item.text)
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    return transcript;
+    throw new Error("Failed to generate transcript. Please ensure the video either has closed captions enabled or is accessible for audio download.");
   } catch (error: any) {
     console.error("Transcript generation error:", error);
     throw new Error(`Failed to generate transcript: ${error.message}`);
