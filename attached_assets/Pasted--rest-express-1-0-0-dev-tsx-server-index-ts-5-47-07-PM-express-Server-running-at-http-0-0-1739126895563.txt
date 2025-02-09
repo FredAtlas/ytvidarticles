@@ -1,0 +1,47 @@
+> rest-express@1.0.0 dev
+> tsx server/index.ts
+
+5:47:07 PM [express] Server running at http://0.0.0.0:5000
+Starting article generation process
+Fetching transcript for URL: https://youtu.be/bbc3rUZxz1c?si=33j35m4z6GLTi2Sg
+Extracting video ID from URL: https://youtu.be/bbc3rUZxz1c?si=33j35m4z6GLTi2Sg
+Found video ID in youtu.be URL: bbc3rUZxz1c
+Extracted video ID: bbc3rUZxz1c
+Downloading audio from video...
+yt-dlp stderr: ERROR: [youtube] bbc3rUZxz1c: Sign in to confirm you’re not a bot. This helps protect our community. Learn more
+
+yt-dlp failed with code 1: ERROR: [youtube] bbc3rUZxz1c: Sign in to confirm you’re not a bot. This helps protect our community. Learn more
+
+Retrying download after 2000ms (attempt 1/3)
+yt-dlp stderr: ERROR: [youtube] bbc3rUZxz1c: Sign in to confirm you’re not a bot. This helps protect our community. Learn more
+
+yt-dlp failed with code 1: ERROR: [youtube] bbc3rUZxz1c: Sign in to confirm you’re not a bot. This helps protect our community. Learn more
+
+Retrying download after 4000ms (attempt 2/3)
+yt-dlp stderr: ERROR: [youtube] bbc3rUZxz1c: Sign in to confirm you’re not a bot. This helps protect our community. Learn more
+
+yt-dlp failed with code 1: ERROR: [youtube] bbc3rUZxz1c: Sign in to confirm you’re not a bot. This helps protect our community. Learn more
+
+Retrying download after 8000ms (attempt 3/3)
+yt-dlp stderr: ERROR: [youtube] bbc3rUZxz1c: Sign in to confirm you’re not a bot. This helps protect our community. Learn more
+
+yt-dlp failed with code 1: ERROR: [youtube] bbc3rUZxz1c: Sign in to confirm you’re not a bot. This helps protect our community. Learn more
+
+Transcription error: Error: Failed to download video after 3 attempts: ERROR: [youtube] bbc3rUZxz1c: Sign in to confirm you’re not a bot. This helps protect our community. Learn more
+
+    at ChildProcess.<anonymous> (/home/runner/workspace/server/services/transcription.ts:91:18)
+    at ChildProcess.emit (node:events:518:28)
+    at maybeClose (node:internal/child_process:1104:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:304:5)
+Transcript generation error: Error: Failed to generate transcript: Failed to download video after 3 attempts: ERROR: [youtube] bbc3rUZxz1c: Sign in to confirm you’re not a bot. This helps protect our community. Learn more
+
+    at generateTranscript (/home/runner/workspace/server/services/transcription.ts:127:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async getTranscript (/home/runner/workspace/server/lib/youtube.ts:13:24)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:35:26)
+Article generation error: Error: Failed to generate transcript. Please try again.
+    at getTranscript (/home/runner/workspace/server/lib/youtube.ts:21:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:35:26)
+6:47:47 PM [express] POST /api/articles 400 in 21071ms :: {"status":"error","message":"Failed to gen…
+6:48:01 PM [express] GET /api/articles 200 in 1468ms :: [{"id":49,"youtubeUrl":"https://www.youtube.…

@@ -1,4 +1,4 @@
-import { generateTranscript } from '../services/transcription';
+import { YoutubeTranscript } from 'youtube-transcript';
 
 export async function getTranscript(url: string): Promise<string> {
   try {
@@ -9,16 +9,23 @@ export async function getTranscript(url: string): Promise<string> {
     }
     console.log("Extracted video ID:", videoId);
 
-    // Generate transcript using our custom service
-    const transcript = await generateTranscript(url);
-    if (!transcript) {
-      throw new Error("Failed to generate transcript from video");
+    // Get transcript using youtube-transcript
+    const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId);
+    if (!transcriptItems || transcriptItems.length === 0) {
+      throw new Error("No transcript available for this video. Please ensure the video has closed captions enabled.");
     }
+
+    // Combine transcript text with proper spacing and punctuation
+    const transcript = transcriptItems
+      .map(item => item.text)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
     return transcript;
   } catch (error: any) {
     console.error("Transcript generation error:", error);
-    throw new Error("Failed to generate transcript. Please try again.");
+    throw new Error(`Failed to generate transcript: ${error.message}`);
   }
 }
 
