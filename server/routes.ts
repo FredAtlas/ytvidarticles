@@ -32,54 +32,26 @@ export function registerRoutes(app: Express) {
 
       // Step 1: Get transcript
       console.log("Fetching transcript for URL:", url);
-      let transcript;
-      try {
-        transcript = await getTranscript(url);
-        console.log("Successfully fetched transcript");
-      } catch (transcriptError: any) {
-        console.error("Failed to get transcript:", transcriptError);
-        return res.status(400).json({
-          status: "error",
-          message: transcriptError.message || "Could not fetch video transcript. Please check the URL and try again."
-        });
-      }
+      const transcript = await getTranscript(url);
+      console.log("Successfully fetched transcript");
 
       // Save transcript to file for OpenAI processing
       const transcriptFile = path.join(TEMP_DIR, `transcript-${Date.now()}.txt`);
       fs.writeFileSync(transcriptFile, transcript);
       console.log("Saved transcript to file:", transcriptFile);
 
-      // Step 2: Generate initial article and analyze topics
+      // Step 2: Generate initial article
       console.log("Generating article from transcript file");
-      let openaiResult;
-      try {
-        openaiResult = await generateArticle(transcriptFile);
-        console.log("Successfully generated article");
-      } catch (openaiError: any) {
-        console.error("OpenAI API Error:", openaiError);
-        fs.unlinkSync(transcriptFile);
-        return res.status(500).json({
-          status: "error",
-          message: "Failed to generate article content. Please try again later."
-        });
-      }
+      const openaiResult = await generateArticle(transcriptFile);
+      console.log("Successfully generated article");
 
       // Clean up transcript file
       fs.unlinkSync(transcriptFile);
 
       // Step 3: Humanize the content
       console.log("Humanizing content");
-      let humanizedContent;
-      try {
-        humanizedContent = await humanizeContent(openaiResult.article);
-        console.log("Successfully humanized content");
-      } catch (humanizeError: any) {
-        console.error("Failed to humanize content:", humanizeError);
-        return res.status(500).json({
-          status: "error",
-          message: "Failed to refine article content. Please try again later."
-        });
-      }
+      const humanizedContent = await humanizeContent(openaiResult.article);
+      console.log("Successfully humanized content");
 
       // Step 4: Save to database
       console.log("Saving article to database");
@@ -106,10 +78,9 @@ export function registerRoutes(app: Express) {
       });
     } catch (error: any) {
       console.error("Article generation error:", error);
-      res.status(500).json({ 
+      res.status(400).json({ 
         status: "error",
-        message: "An unexpected error occurred. Please try again later.",
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        message: error.message || "Failed to generate article"
       });
     }
   });
@@ -173,7 +144,7 @@ export function registerRoutes(app: Express) {
       details: error.message 
     });
   }
-});
+  });
 
   app.post("/api/articles/:id/social-media", async (req, res) => {
     try {
