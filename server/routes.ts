@@ -12,6 +12,8 @@ import { generateSocialMediaContent } from "./services/social-media";
 import { createWordPressDraft } from "./services/wordpress";
 import { convertToRtf } from "./lib/rtf";
 import { refineContent } from "./services/perplexity";
+import { convertToHtml } from "./lib/rtf";
+
 
 export function registerRoutes(app: Express) {
   const httpServer = createServer(app);
@@ -45,14 +47,17 @@ export function registerRoutes(app: Express) {
       console.log("Starting article generation process");
       const { url } = req.body;
       if (!url) {
-        return res.status(400).json({ message: "YouTube URL is required" });
+        return res.status(400).json({ 
+          status: "error",
+          message: "YouTube URL is required" 
+        });
       }
 
       // Step 1: Get transcript
       console.log("Fetching transcript for URL:", url);
       const transcript = await getTranscript(url).catch(error => {
         console.error("Failed to get transcript:", error);
-        throw new Error("Could not fetch video transcript. Please check the URL and try again.");
+        throw error; // Pass through the original error
       });
       console.log("Successfully fetched transcript");
 
@@ -118,6 +123,7 @@ export function registerRoutes(app: Express) {
     } catch (error: any) {
       console.error("Article generation error:", error);
       res.status(error.status || 500).json({ 
+        status: "error",
         message: error.message || "Failed to generate article",
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
@@ -335,21 +341,15 @@ app.post("/api/articles/:id/social-media", async (req, res) => {
     app.post("/api/articles/integrate", async (req, res) => {
       try {
         const { existingContent, newSection } = req.body;
-  
         if (!existingContent || !newSection) {
           return res.status(400).json({ message: "Missing required content" });
         }
-  
-        // Get settings for context
         const settingsData = await db.query.settings.findFirst();
-  
-        // Call enhanced content integration
         const integratedContent = await integrateContent(
           existingContent, 
           newSection,
           settingsData?.editorialGuidelines
         );
-  
         res.status(200).json({
           status: "success",
           integratedContent
@@ -395,7 +395,6 @@ app.post("/api/articles/:id/social-media", async (req, res) => {
     }
   });
   
-  // Add this route after the other article-related routes
   // Update article publication status
   app.post("/api/articles/:id/publish", async (req, res) => {
     try {

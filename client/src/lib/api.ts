@@ -59,8 +59,8 @@ export function useGenerateArticle(options: GenerateArticleOptions = {}) {
         });
 
         if (!res.ok) {
-          const errorText = await res.text();
-          throw new Error(errorText);
+          const errorData = await res.json();
+          throw new Error(errorData.message || "Failed to generate article");
         }
 
         const data = await res.json();
@@ -89,9 +89,10 @@ export function useGenerateArticle(options: GenerateArticleOptions = {}) {
       });
     },
     onError: (error: Error) => {
+      // Show error message
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Failed to generate article",
         variant: "destructive",
       });
     },
