@@ -1,4 +1,4 @@
-import { YoutubeTranscript } from 'youtube-transcript';
+import { generateTranscript } from '../services/transcription';
 
 export async function getTranscript(url: string): Promise<string> {
   try {
@@ -9,19 +9,16 @@ export async function getTranscript(url: string): Promise<string> {
     }
     console.log("Extracted video ID:", videoId);
 
-    const transcript = await YoutubeTranscript.fetchTranscript(videoId);
-    if (!transcript || transcript.length === 0) {
-      throw new Error("No transcript available for this video");
+    // Generate transcript using our custom service
+    const transcript = await generateTranscript(url);
+    if (!transcript) {
+      throw new Error("Failed to generate transcript from video");
     }
 
-    console.log(`Fetched transcript with ${transcript.length} segments`);
-    const fullTranscript = transcript.map(item => item.text).join(' ');
-    console.log(`Total transcript length: ${fullTranscript.length} characters`);
-
-    return fullTranscript;
+    return transcript;
   } catch (error: any) {
-    console.error("Transcript fetch error:", error);
-    throw new Error("Failed to fetch transcript. Please ensure the video has captions enabled and try again.");
+    console.error("Transcript generation error:", error);
+    throw new Error("Failed to generate transcript. Please try again.");
   }
 }
 
@@ -43,7 +40,7 @@ function extractVideoId(url: string): string | null {
       const pathSegments = urlObj.pathname.split('/');
       const shortsIndex = pathSegments.indexOf('shorts');
       if (shortsIndex !== -1 && pathSegments[shortsIndex + 1]) {
-        videoId = pathSegments[shortsIndex + 1].split('?')[0]; // Remove any query parameters
+        videoId = pathSegments[shortsIndex + 1].split('?')[0];
         console.log("Found video ID in shorts URL:", videoId);
         return videoId;
       }
@@ -51,7 +48,7 @@ function extractVideoId(url: string): string | null {
 
     // Handle youtu.be URLs
     if (urlObj.hostname === 'youtu.be') {
-      videoId = urlObj.pathname.substring(1).split('?')[0]; // Remove any query parameters
+      videoId = urlObj.pathname.substring(1).split('?')[0];
       if (videoId) {
         console.log("Found video ID in youtu.be URL:", videoId);
         return videoId;
