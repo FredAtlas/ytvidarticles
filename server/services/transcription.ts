@@ -21,16 +21,32 @@ const getOpenAIClient = () => {
 async function downloadAudio(videoUrl: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const outputPath = path.join(TEMP_DIR, `audio-${Date.now()}.mp3`);
-    
+
+    // Enhanced yt-dlp parameters to bypass restrictions
     const ytDlp = spawn('yt-dlp', [
-      '-x',
+      '--no-check-certificate',
+      '--no-cache-dir',
+      '--extractor-retries', '3',
+      '--force-ipv4',
+      '--geo-bypass',
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      '--add-header', 'Accept-Language:en-US,en;q=0.9',
+      '--format', 'bestaudio[ext=m4a]/bestaudio',
+      '--extract-audio',
       '--audio-format', 'mp3',
-      '-o', outputPath,
+      '--audio-quality', '0',
+      '--no-part',
+      '--no-mtime',
+      '--output', outputPath,
       videoUrl
     ]);
 
     ytDlp.stderr.on('data', (data) => {
       console.log(`yt-dlp stderr: ${data}`);
+    });
+
+    ytDlp.stdout.on('data', (data) => {
+      console.log(`yt-dlp stdout: ${data}`);
     });
 
     ytDlp.on('close', (code) => {
