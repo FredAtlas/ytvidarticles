@@ -27,7 +27,20 @@ interface Article {
 
 interface GenerateArticleOptions {
   onProgress?: (step: string) => void;
+  onError?: (error: Error) => void;
   onSuccess?: () => void;
+}
+
+interface APIErrorResponse {
+  status: "error";
+  message: string;
+  details?: string;
+}
+
+interface APISuccessResponse<T> {
+  status: "success";
+  message: string;
+  data: T;
 }
 
 export function useArticle(id?: string) {
@@ -58,12 +71,10 @@ export function useGenerateArticle(options: GenerateArticleOptions = {}) {
           body: JSON.stringify({ url }),
         });
 
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.message || "Failed to generate article");
-        }
-
         const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to generate article");
+        }
 
         // Update progress through steps
         options.onProgress?.("analysis");
@@ -71,25 +82,24 @@ export function useGenerateArticle(options: GenerateArticleOptions = {}) {
         options.onProgress?.("refinement");
         options.onProgress?.("completion");
 
-        return data.data as Article;
+        return data.data;
       } catch (error: any) {
         console.error("Article generation error:", error);
-        throw error;
+        throw error instanceof Error ? error : new Error(error.message || "Failed to generate article");
       }
     },
     onSuccess: (data) => {
-      // Invalidate the articles query to trigger a refresh
       queryClient.invalidateQueries({ queryKey: ["/api/articles"] });
       options.onSuccess?.();
 
-      // Show success message
       toast({
         title: "Success",
         description: "Article generated successfully. You can now edit it.",
       });
     },
     onError: (error: Error) => {
-      // Show error message
+      options.onError?.(error);
+
       toast({
         title: "Error",
         description: error.message || "Failed to generate article",

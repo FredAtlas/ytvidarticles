@@ -4,16 +4,10 @@ import { db } from "@db";
 import { articles, settings } from "@db/schema";
 import { getTranscript } from "./lib/youtube";
 import { generateArticle } from "./services/openai";
-import { humanizeContent, integrateContent } from "./lib/perplexity";
+import { humanizeContent } from "./lib/perplexity";
 import { eq, inArray } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
-import { generateSocialMediaContent } from "./services/social-media";
-import { createWordPressDraft } from "./services/wordpress";
-import { convertToRtf } from "./lib/rtf";
-import { refineContent } from "./services/perplexity";
-import { convertToHtml } from "./lib/rtf";
-
 
 export function registerRoutes(app: Express) {
   const httpServer = createServer(app);
@@ -23,6 +17,102 @@ export function registerRoutes(app: Express) {
   if (!fs.existsSync(TEMP_DIR)) {
     fs.mkdirSync(TEMP_DIR);
   }
+
+  app.post("/api/articles", async (req, res) => {
+    try {
+      console.log("Starting article generation process");
+      const { url } = req.body;
+
+      if (!url) {
+        return res.status(400).json({ 
+          status: "error",
+          message: "YouTube URL is required" 
+        });
+      }
+
+      // Step 1: Get transcript
+      console.log("Fetching transcript for URL:", url);
+      let transcript;
+      try {
+        transcript = await getTranscript(url);
+        console.log("Successfully fetched transcript");
+      } catch (transcriptError: any) {
+        console.error("Failed to get transcript:", transcriptError);
+        return res.status(400).json({
+          status: "error",
+          message: transcriptError.message || "Could not fetch video transcript. Please check the URL and try again."
+        });
+      }
+
+      // Save transcript to file for OpenAI processing
+      const transcriptFile = path.join(TEMP_DIR, `transcript-${Date.now()}.txt`);
+      fs.writeFileSync(transcriptFile, transcript);
+      console.log("Saved transcript to file:", transcriptFile);
+
+      // Step 2: Generate initial article and analyze topics
+      console.log("Generating article from transcript file");
+      let openaiResult;
+      try {
+        openaiResult = await generateArticle(transcriptFile);
+        console.log("Successfully generated article");
+      } catch (openaiError: any) {
+        console.error("OpenAI API Error:", openaiError);
+        fs.unlinkSync(transcriptFile);
+        return res.status(500).json({
+          status: "error",
+          message: "Failed to generate article content. Please try again later."
+        });
+      }
+
+      // Clean up transcript file
+      fs.unlinkSync(transcriptFile);
+
+      // Step 3: Humanize the content
+      console.log("Humanizing content");
+      let humanizedContent;
+      try {
+        humanizedContent = await humanizeContent(openaiResult.article);
+        console.log("Successfully humanized content");
+      } catch (humanizeError: any) {
+        console.error("Failed to humanize content:", humanizeError);
+        return res.status(500).json({
+          status: "error",
+          message: "Failed to refine article content. Please try again later."
+        });
+      }
+
+      // Step 4: Save to database
+      console.log("Saving article to database");
+      const article = await db.insert(articles).values({
+        youtubeUrl: url,
+        title: openaiResult.titles[0],
+        content: humanizedContent,
+        transcript: transcript,
+        metaDescription: openaiResult.metaDescription,
+        seoTitles: openaiResult.titles,
+        tags: openaiResult.tags,
+        seoScore: openaiResult.seoScore,
+        keyTopics: openaiResult.keyTopics || [],
+        missingTopics: openaiResult.missingTopics || [],
+        generationChunks: openaiResult.generationChunks || [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
+
+      res.status(200).json({
+        status: "success",
+        message: "Article generated successfully",
+        data: article[0]
+      });
+    } catch (error: any) {
+      console.error("Article generation error:", error);
+      res.status(500).json({ 
+        status: "error",
+        message: "An unexpected error occurred. Please try again later.",
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
+  });
 
   // Get single article by ID
   app.get("/api/articles/:id", async (req, res) => {
@@ -39,94 +129,6 @@ export function registerRoutes(app: Express) {
     } catch (error: any) {
       console.error("Failed to fetch article:", error);
       res.status(500).json({ message: "Failed to fetch article" });
-    }
-  });
-
-  app.post("/api/articles", async (req, res) => {
-    try {
-      console.log("Starting article generation process");
-      const { url } = req.body;
-      if (!url) {
-        return res.status(400).json({ 
-          status: "error",
-          message: "YouTube URL is required" 
-        });
-      }
-
-      // Step 1: Get transcript
-      console.log("Fetching transcript for URL:", url);
-      const transcript = await getTranscript(url).catch(error => {
-        console.error("Failed to get transcript:", error);
-        throw error; // Pass through the original error
-      });
-      console.log("Successfully fetched transcript");
-
-      // Save transcript to file for OpenAI processing
-      const transcriptFile = path.join(TEMP_DIR, `transcript-${Date.now()}.txt`);
-      fs.writeFileSync(transcriptFile, transcript);
-      console.log("Saved transcript to file:", transcriptFile);
-
-      // Step 2: Generate initial article and analyze topics
-      console.log("Generating article from transcript file");
-      const openaiResult = await generateArticle(transcriptFile).catch(error => {
-        console.error("OpenAI API Error:", error);
-        if (error.response?.data?.error?.message) {
-          throw new Error(`AI Service Error: ${error.response.data.error.message}`);
-        }
-        throw new Error("Failed to generate article. Please try again later.");
-      });
-      console.log("Successfully generated article");
-
-      // Clean up transcript file
-      fs.unlinkSync(transcriptFile);
-
-      // Step 3: Humanize the content
-      console.log("Humanizing content");
-      const humanizedContent = await humanizeContent(openaiResult.article).catch(error => {
-        console.error("Failed to humanize content:", error);
-        throw new Error("Failed to refine article content. Please try again later.");
-      });
-      console.log("Successfully humanized content");
-
-      // Log generation chunks for debugging
-      console.log("Generation chunks:", JSON.stringify(openaiResult.generationChunks, null, 2));
-
-      // Step 4: Save to database with all information
-      console.log("Saving article to database");
-      const article = await db.insert(articles).values({
-        youtubeUrl: url,
-        title: openaiResult.titles[0],
-        content: humanizedContent,
-        transcript: transcript,
-        metaDescription: openaiResult.metaDescription,
-        seoTitles: openaiResult.titles,
-        tags: openaiResult.tags,
-        seoScore: openaiResult.seoScore,
-        keyTopics: openaiResult.keyTopics || [],
-        missingTopics: openaiResult.missingTopics || [],
-        generationChunks: openaiResult.generationChunks || [], // Ensure chunks are saved
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }).returning();
-
-      // Log saved article for verification
-      console.log("Article saved with chunks:", JSON.stringify({
-        id: article[0].id,
-        chunkCount: article[0].generationChunks?.length || 0
-      }, null, 2));
-
-      res.status(200).json({
-        status: "success",
-        message: "Article generated successfully",
-        data: article[0]
-      });
-    } catch (error: any) {
-      console.error("Article generation error:", error);
-      res.status(error.status || 500).json({ 
-        status: "error",
-        message: error.message || "Failed to generate article",
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      });
     }
   });
 
@@ -173,7 +175,7 @@ export function registerRoutes(app: Express) {
   }
 });
 
-app.post("/api/articles/:id/social-media", async (req, res) => {
+  app.post("/api/articles/:id/social-media", async (req, res) => {
     try {
       const article = await db.query.articles.findFirst({
         where: eq(articles.id, parseInt(req.params.id)),
