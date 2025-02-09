@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useGenerateArticle } from "@/lib/api";
 import { Loader2 } from "lucide-react";
 import { ArticleGenerationProgress, GenerationStep } from "./article-generation-progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 interface FormData {
   url: string;
@@ -28,6 +30,7 @@ export default function ArticleForm() {
 
   const [steps, setSteps] = useState<GenerationStep[]>(GENERATION_STEPS);
   const [currentStep, setCurrentStep] = useState<number>(0);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const generateArticle = useGenerateArticle({
     onProgress: (step: string) => {
@@ -43,17 +46,22 @@ export default function ArticleForm() {
         });
       });
       setCurrentStep(steps.findIndex(s => s.id === step));
+    },
+    onError: (error: any) => {
+      setApiError(error.message || "Failed to generate article. Please try again.");
     }
   });
 
   const onSubmit = async (data: FormData) => {
     try {
-      // Reset progress
+      // Reset states
+      setApiError(null);
       setSteps(GENERATION_STEPS);
       setCurrentStep(0);
       await generateArticle.mutateAsync(data.url);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to generate article:", error);
+      setApiError(error.message || "Failed to generate article. Please try again.");
     }
   };
 
@@ -83,6 +91,13 @@ export default function ArticleForm() {
               <p className="text-sm text-destructive mt-1">{errors.url.message}</p>
             )}
           </div>
+
+          {apiError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{apiError}</AlertDescription>
+            </Alert>
+          )}
 
           {generateArticle.isPending && (
             <ArticleGenerationProgress 

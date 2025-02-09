@@ -1,0 +1,43 @@
+
+> rest-express@1.0.0 dev
+> tsx server/index.ts
+
+4:50:48 PM [express] Server running at http://0.0.0.0:5000
+Starting article generation process
+Fetching transcript for URL: https://youtu.be/3TVFcV4ZuI8?feature=shared
+Extracting video ID from URL: https://youtu.be/3TVFcV4ZuI8?feature=shared
+Found video ID in youtu.be URL: 3TVFcV4ZuI8
+Extracted video ID: 3TVFcV4ZuI8
+Transcript fetch error: YoutubeTranscriptDisabledError: [YoutubeTranscript] 🚨 Transcript is disabled on this video (3TVFcV4ZuI8)
+    at YoutubeTranscript.<anonymous> (/home/runner/workspace/node_modules/youtube-transcript/dist/youtube-transcript.common.js:82:23)
+    at Generator.next (<anonymous>)
+    at fulfilled (/home/runner/workspace/node_modules/youtube-transcript/dist/youtube-transcript.common.js:19:58)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+Failed to get transcript: Error: This video has transcripts disabled. Please try a different video that has captions/transcripts enabled. You can check if a video has transcripts by looking for the CC (Closed Captions) button in the YouTube player.
+    at getTranscript (/home/runner/workspace/server/lib/youtube.ts:27:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:53:26)
+Article generation error: Error: Could not fetch video transcript. Please check the URL and try again.
+    at <anonymous> (/home/runner/workspace/server/routes.ts:55:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:53:26)
+4:51:17 PM [express] POST /api/articles 500 in 594ms :: {"message":"Could not fetch video transcript…
+Starting article generation process
+Fetching transcript for URL: https://youtu.be/2N0xZJNMRLE?feature=shared
+Extracting video ID from URL: https://youtu.be/2N0xZJNMRLE?feature=shared
+Found video ID in youtu.be URL: 2N0xZJNMRLE
+Extracted video ID: 2N0xZJNMRLE
+Transcript fetch error: YoutubeTranscriptDisabledError: [YoutubeTranscript] 🚨 Transcript is disabled on this video (2N0xZJNMRLE)
+    at YoutubeTranscript.<anonymous> (/home/runner/workspace/node_modules/youtube-transcript/dist/youtube-transcript.common.js:82:23)
+    at Generator.next (<anonymous>)
+    at fulfilled (/home/runner/workspace/node_modules/youtube-transcript/dist/youtube-transcript.common.js:19:58)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+Failed to get transcript: Error: This video has transcripts disabled. Please try a different video that has captions/transcripts enabled. You can check if a video has transcripts by looking for the CC (Closed Captions) button in the YouTube player.
+    at getTranscript (/home/runner/workspace/server/lib/youtube.ts:27:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:53:26)
+Article generation error: Error: Could not fetch video transcript. Please check the URL and try again.
+    at <anonymous> (/home/runner/workspace/server/routes.ts:55:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:53:26)
+4:51:51 PM [express] POST /api/articles 500 in 511ms :: {"message":"Could not fetch video transcript…
