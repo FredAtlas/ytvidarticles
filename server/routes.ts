@@ -3,7 +3,7 @@ import { createServer } from "http";
 import { db } from "@db";
 import { articles, settings } from "@db/schema";
 import { getTranscript } from "./lib/youtube";
-import { generateArticle } from "./services/openai";
+import { generateArticle } from "./services/openai"; // Updated import path
 import { humanizeContent } from "./lib/perplexity";
 import { eq, inArray } from "drizzle-orm";
 import fs from "fs";
