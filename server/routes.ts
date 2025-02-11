@@ -3,7 +3,7 @@ import { createServer } from "http";
 import { db } from "@db";
 import { articles, settings } from "@db/schema";
 import { getTranscript } from "./lib/youtube";
-import { generateArticle } from "./services/openai"; // Updated import path
+import { generateArticle, improveContent } from "./services/openai"; 
 import { humanizeContent } from "./lib/perplexity";
 import { eq, inArray } from "drizzle-orm";
 import fs from "fs";
@@ -116,34 +116,38 @@ export function registerRoutes(app: Express) {
     }
   });
 
-  // Generate social media content for an article
+  // Update the improve endpoint
   app.post("/api/articles/:id/improve", async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const { content } = req.body;
-    
-    if (!content) {
-      return res.status(400).json({ error: "Content is required" });
+    try {
+      const id = parseInt(req.params.id);
+      const { content } = req.body;
+
+      if (!content) {
+        return res.status(400).json({ error: "Content is required" });
+      }
+
+      const article = await db.query.articles.findFirst({
+        where: eq(articles.id, id)
+      });
+
+      if (!article) {
+        return res.status(404).json({ error: "Article not found" });
+      }
+
+      const improvedContent = await improveContent(content, article.transcript || '');
+
+      await db.update(articles)
+        .set({ content: improvedContent, updatedAt: new Date() })
+        .where(eq(articles.id, id));
+
+      res.json({ content: improvedContent });
+    } catch (error: any) {
+      console.error("Content improvement error:", error);
+      res.status(500).json({ 
+        error: "Failed to improve content",
+        details: error.message 
+      });
     }
-    
-    const settingsData = await db.query.settings.findFirst();
-    const improvedContent = await refineContent(
-      content,
-      settingsData?.writingSamples || []
-    );
-
-    await db.update(articles)
-      .set({ content: improvedContent, updatedAt: new Date() })
-      .where(eq(articles.id, id));
-
-    res.json({ content: improvedContent });
-  } catch (error: any) {
-    console.error("Content improvement error:", error);
-    res.status(500).json({ 
-      error: "Failed to improve content",
-      details: error.message 
-    });
-  }
   });
 
   app.post("/api/articles/:id/social-media", async (req, res) => {

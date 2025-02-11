@@ -174,6 +174,51 @@ export interface GenerationResult {
   generationChunks: GenerationChunk[];
 }
 
+export async function improveContent(content: string, transcript: string): Promise<string> {
+  const openai = getOpenAIClient();
+
+  try {
+    const response = await retryWithDelay(() =>
+      openai.chat.completions.create({
+        model: "gpt-4-1106-preview",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert content editor. Compare the article with the original transcript 
+            and improve it by:
+            1. Identifying and adding any important information from the transcript that's missing in the article
+            2. Removing any source citations or reference markers (e.g., [1], [source])
+            3. Ensuring the content flows naturally and maintains a consistent tone
+            4. Preserving the article's structure while integrating the missing information
+
+            Return only the improved article content.`
+          },
+          {
+            role: "user",
+            content: `Current article:
+            ${content}
+
+            Original transcript:
+            ${transcript}`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 4000
+      })
+    );
+
+    const improvedContent = response.choices[0].message.content;
+    if (!improvedContent) {
+      throw new Error("No content received from OpenAI");
+    }
+
+    return improvedContent;
+  } catch (error: any) {
+    console.error("Content improvement error:", error);
+    throw new Error(`Failed to improve content: ${error.message}`);
+  }
+}
+
 export async function generateArticle(transcriptFilePath: string): Promise<GenerationResult> {
   const openai = getOpenAIClient();
   const settingsData = await db.query.settings.findFirst();
@@ -313,8 +358,11 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
     const result = JSON.parse(initialResponse.choices[0].message.content || "{}");
     console.log(`Generated article length: ${result.article.length} characters`);
 
+    const improvedArticle = await improveContent(result.article, summaries.join('\n\n'));
+    
     return {
       ...result,
+      article: improvedArticle,
       generationChunks
     };
 
