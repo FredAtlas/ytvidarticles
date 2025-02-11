@@ -8,11 +8,11 @@ import { Stream } from "stream";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
-const BASE_TOKENS_PER_CHUNK = 300;
+const BASE_TOKENS_PER_CHUNK = 800; // Increased from 300
 const CHARS_PER_TOKEN = 4;
-const MIN_CHUNK_SIZE = 200;
-const MAX_CHUNK_SIZE = 400;
-const CHUNK_OVERLAP = 100;
+const MIN_CHUNK_SIZE = 500; // Increased from 200
+const MAX_CHUNK_SIZE = 1000; // Increased from 400
+const CHUNK_OVERLAP = 150; // Increased from 100
 
 interface ComplexityMetrics {
   averageSentenceLength: number;
@@ -98,6 +98,9 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
   let paragraphBuffer = '';
   let complexityMetrics: ComplexityMetrics | null = null;
   let wordCount = 0;
+  let totalWordCount = 0;
+
+  console.log("Starting to process file in chunks...");
 
   for await (const line of rl) {
     // Analyze complexity after gathering some content
@@ -117,45 +120,41 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
         const paragraphTokens = Math.ceil(paragraph.length / CHARS_PER_TOKEN);
         const paragraphWords = paragraph.split(/\s+/).length;
 
-        if (wordCount + paragraphWords > 300 || estimatedTokens + paragraphTokens > currentMaxTokens) {
-          previousChunkEnd = currentChunk.split('\n').slice(-2).join('\n');
-          console.log(`Yielding chunk with ${wordCount} words (${estimatedTokens} tokens)`);
+        if (wordCount + paragraphWords > 800 || estimatedTokens + paragraphTokens > currentMaxTokens) {
+          previousChunkEnd = currentChunk.split('\n').slice(-3).join('\n'); // Increased context retention
+          console.log(`Yielding chunk with ${wordCount} words (${estimatedTokens} tokens). Total words processed: ${totalWordCount}`);
           yield currentChunk;
 
           currentChunk = previousChunkEnd + '\n\n' + paragraph;
           estimatedTokens = Math.ceil(previousChunkEnd.length / CHARS_PER_TOKEN) + paragraphTokens;
-          wordCount = previousChunkEnd.split(/\s+/).length + paragraph.split(/\s+/).length;
+          wordCount = previousChunkEnd.split(/\s+/).length + paragraphWords;
         } else {
           currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
           estimatedTokens += paragraphTokens;
           wordCount += paragraphWords;
         }
 
+        totalWordCount += paragraphWords;
         paragraphBuffer = '';
       }
     } else {
       paragraphBuffer += (paragraphBuffer ? ' ' : '') + line;
     }
-
-    // Force chunk break if we exceed the target size
-    if (wordCount > 300 || estimatedTokens > currentMaxTokens * 0.7) {
-      previousChunkEnd = currentChunk.split('\n').slice(-2).join('\n');
-      console.log(`Forcing chunk break at ${wordCount} words (${estimatedTokens} tokens)`);
-      yield currentChunk;
-      currentChunk = previousChunkEnd + '\n\n';
-      estimatedTokens = Math.ceil(previousChunkEnd.length / CHARS_PER_TOKEN);
-      wordCount = previousChunkEnd.split(/\s+/).length;
-    }
   }
 
+  // Handle any remaining content
   if (paragraphBuffer) {
     const paragraph = paragraphBuffer.trim();
     currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
+    totalWordCount += paragraph.split(/\s+/).length;
   }
 
   if (currentChunk.trim()) {
+    console.log(`Yielding final chunk. Total words processed: ${totalWordCount}`);
     yield currentChunk;
   }
+
+  console.log(`Finished processing file. Total words processed: ${totalWordCount}`);
 }
 
 interface GenerationChunk {
@@ -184,12 +183,14 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
     const summaries: string[] = [];
     const generationChunks: GenerationChunk[] = [];
     let chunkCount = 0;
+    let totalWords = 0;
     let previousSummaryEnd = '';
 
-    // Process file in chunks with improved context handling
     for await (const chunk of readFileInChunks(transcriptFilePath)) {
       chunkCount++;
-      console.log(`Processing chunk ${chunkCount}, approximate size: ${chunk.length} characters`);
+      const chunkWords = chunk.split(/\s+/).length;
+      totalWords += chunkWords;
+      console.log(`Processing chunk ${chunkCount}, size: ${chunkWords} words (total words: ${totalWords})`);
 
       try {
         const response = await retryWithDelay(() =>
@@ -201,19 +202,19 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
                 content: `Create a detailed summary of this transcript segment, ensuring no important information is lost.
                          If this is not the first chunk, incorporate it seamlessly with: ${previousSummaryEnd}
                          Focus on maintaining narrative flow and context.
-                         Length: Keep it under 1000 words while preserving all key information.
+                         Length: Aim for a comprehensive summary that captures all key points.
                          Do not include citation markers, reference numbers, or source indicators.`
               },
               { role: "user", content: chunk }
             ],
             temperature: 0.7,
-            max_tokens: 1500,
+            max_tokens: 2000, // Increased from 1500
           })
         );
 
         const summary = response.choices[0].message.content;
         if (summary) {
-          previousSummaryEnd = summary.split('\n').slice(-2).join('\n');
+          previousSummaryEnd = summary.split('\n').slice(-3).join('\n'); // Increased context retention
           summaries.push(summary);
 
           generationChunks.push({
@@ -222,7 +223,7 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
             position: chunkCount - 1
           });
 
-          console.log(`Successfully processed chunk ${chunkCount}`);
+          console.log(`Successfully processed chunk ${chunkCount} of ${chunkWords} words`);
         }
       } catch (error: any) {
         console.error(`Error processing chunk ${chunkCount}:`, error);
@@ -230,7 +231,7 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
       }
     }
 
-    console.log(`Successfully processed ${chunkCount} chunks. Extracting key topics...`);
+    console.log(`Successfully processed ${chunkCount} chunks (${totalWords} total words). Extracting key topics...`);
 
     // Extract key topics for research
     const topicsResponse = await retryWithDelay(() =>
