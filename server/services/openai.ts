@@ -8,11 +8,11 @@ import { Stream } from "stream";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
-const BASE_TOKENS_PER_CHUNK = 800; // Increased from 300
+const BASE_TOKENS_PER_CHUNK = 800;
 const CHARS_PER_TOKEN = 4;
-const MIN_CHUNK_SIZE = 500; // Increased from 200
-const MAX_CHUNK_SIZE = 1000; // Increased from 400
-const CHUNK_OVERLAP = 150; // Increased from 100
+const MIN_CHUNK_SIZE = 500;
+const MAX_CHUNK_SIZE = 1000;
+const CHUNK_OVERLAP = 150;
 
 interface ComplexityMetrics {
   averageSentenceLength: number;
@@ -121,7 +121,7 @@ async function* readFileInChunks(filePath: string): AsyncGenerator<string> {
         const paragraphWords = paragraph.split(/\s+/).length;
 
         if (wordCount + paragraphWords > 800 || estimatedTokens + paragraphTokens > currentMaxTokens) {
-          previousChunkEnd = currentChunk.split('\n').slice(-3).join('\n'); // Increased context retention
+          previousChunkEnd = currentChunk.split('\n').slice(-3).join('\n');
           console.log(`Yielding chunk with ${wordCount} words (${estimatedTokens} tokens). Total words processed: ${totalWordCount}`);
           yield currentChunk;
 
@@ -199,23 +199,27 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
             messages: [
               {
                 role: "system",
-                content: `Create a detailed summary of this transcript segment, ensuring no important information is lost.
-                         If this is not the first chunk, incorporate it seamlessly with: ${previousSummaryEnd}
-                         Focus on maintaining narrative flow and context.
-                         Length: Aim for a comprehensive summary that captures all key points.
-                         Do not include citation markers, reference numbers, or source indicators.`
+                content: `You are an expert content writer tasked with creating a detailed summary of this transcript segment.
+                         Key requirements:
+                         1. Maintain all important information, examples, and specific details
+                         2. Use descriptive language and expand on technical concepts
+                         3. If this is not the first chunk, seamlessly integrate with: ${previousSummaryEnd}
+                         4. Focus on creating comprehensive, publication-ready content
+                         5. Preserve quotes, statistics, and specific examples
+                         Do not include citation markers or reference numbers.`
               },
               { role: "user", content: chunk }
             ],
             temperature: 0.7,
-            max_tokens: 2000, // Increased from 1500
+            max_tokens: 3000
           })
         );
 
         const summary = response.choices[0].message.content;
         if (summary) {
-          previousSummaryEnd = summary.split('\n').slice(-3).join('\n'); // Increased context retention
+          previousSummaryEnd = summary.split('\n').slice(-3).join('\n');
           summaries.push(summary);
+          console.log(`Generated summary length: ${summary.length} characters`);
 
           generationChunks.push({
             originalText: chunk,
@@ -257,25 +261,27 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
     console.log("Researching additional content for key topics...");
     const researchResults = await researchTopics(keyTopics);
 
-    console.log("Generating initial article with integrated research...");
+    console.log("Generating comprehensive article with integrated research...");
     const initialResponse = await retryWithDelay(() =>
       openai.chat.completions.create({
         model: "gpt-4-1106-preview",
         messages: [
           {
             role: "system",
-            content: `You are an expert content writer creating a comprehensive article.
+            content: `You are an expert content writer creating a comprehensive, long-form article.
 
-            Guidelines:
-            1. Seamlessly integrate the transcript content with the research information
-            2. Maintain a single, cohesive narrative throughout
-            3. Use only one conclusion section at the end
-            4. Do not include any citations, reference numbers, or source indicators
-            5. Structure the content naturally without obvious transitions between transcript and research content
+            Requirements:
+            1. Create a detailed, thorough article that fully explores all topics
+            2. Maintain depth and detail from the original transcript
+            3. Include specific examples, quotes, and technical details
+            4. Seamlessly integrate transcript content with research information
+            5. Use clear section headings and proper article structure
+            6. Aim for a comprehensive long-form article (2000-3000 words)
+            7. Do not include citations or reference numbers
 
-            Format the response as a JSON object with the following structure:
+            Format the response as a JSON object with:
             {
-              "article": "the seamlessly integrated article content",
+              "article": "the detailed article content",
               "titles": ["5 SEO optimized titles"],
               "metaDescription": "155 character meta description",
               "tags": ["at least 5 tags including primary keyword"],
@@ -299,11 +305,13 @@ export async function generateArticle(transcriptFilePath: string): Promise<Gener
           }
         ],
         temperature: 0.7,
+        max_tokens: 4000,
         response_format: { type: "json_object" }
       })
     );
 
     const result = JSON.parse(initialResponse.choices[0].message.content || "{}");
+    console.log(`Generated article length: ${result.article.length} characters`);
 
     return {
       ...result,
