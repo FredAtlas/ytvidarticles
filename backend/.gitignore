@@ -1,0 +1,81 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Testing
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
+.hypothesis/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Alembic
+alembic/versions/*.pyc
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Data
+data/uploads/*
+data/images/*
+data/audio/*
+data/backups/*
+!data/uploads/.gitkeep
+!data/images/.gitkeep
+!data/audio/.gitkeep
+!data/backups/.gitkeep
+
+# AI Models
+ai_models/sdxl/*
+ai_models/xtts/*
+ai_models/ollama/*
+!ai_models/sdxl/.gitkeep
+!ai_models/xtts/.gitkeep
+!ai_models/ollama/.gitkeep
